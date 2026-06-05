@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import argparse
+import json
+from functools import partial
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+
+from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
+from mania_difficulty.metrics import regression_report
+from mania_difficulty.models.lstm import LSTMDifficultyModel
+from mania_difficulty.train import evaluate_loader, write_predictions
+from mania_difficulty.visualize import plot_prediction_scatter, write_run_report
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate a saved checkpoint on a dataset.")
+    parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument("--labels", type=Path, required=True)
+    parser.add_argument("--sequences", type=Path, required=True)
+    parser.add_argument("--out-dir", type=Path, default=None)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--device", default="")
+    args = parser.parse_args()
+
+    device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    checkpoint = torch.load(args.checkpoint, map_location=device)
+    target_columns = list(checkpoint["target_columns"])
+    target_mean_np = np.asarray(checkpoint["target_mean"], dtype="float32")
+    target_std_np = np.asarray(checkpoint["target_std"], dtype="float32")
+    target_mean_t = torch.tensor(target_mean_np, dtype=torch.float32, device=device)
+    target_std_t = torch.tensor(target_std_np, dtype=torch.float32, device=device)
+
+    dataset = ManiaDifficultyDataset(args.labels, args.sequences, target_columns=target_columns)
+    loader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=partial(collate_batch, max_notes=int(checkpoint.get("max_notes", 3000))),
+    )
+
+    model = LSTMDifficultyModel(**checkpoint["model_config"]).to(device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+
+    _, pred, actual, beatmap_ids = evaluate_loader(
+        model,
+        loader,
+        device,
+        target_mean_t,
+        target_std_t,
+        target_mean_np,
+        target_std_np,
+    )
+
+    out_dir = args.out_dir or args.checkpoint.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    predictions_csv = out_dir / "eval_predictions.csv"
+    write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+    metrics = regression_report(actual, pred, target_columns)
+    metrics_path = out_dir / "eval_metrics.json"
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    plot_prediction_scatter(predictions_csv, target_columns, out_dir / "eval_prediction_scatter.png")
+    write_run_report(
+        out_dir,
+        target_columns=target_columns,
+        metrics_path=metrics_path,
+        learning_curve_name="",
+        prediction_scatter_name="eval_prediction_scatter.png",
+    )
+    print(json.dumps(metrics, indent=2))
+
+
+if __name__ == "__main__":
+    main()

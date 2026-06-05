@@ -1,0 +1,155 @@
+# osu!mania Difficulty Prediction Model
+
+Raw-note osu!mania 4K difficulty prediction from leaderboard accuracy data.
+
+This repo is set up as a learning-friendly baseline: every training run saves
+human-readable outputs so we can see whether the model is improving instead of
+only staring at terminal logs.
+
+## What This Predicts
+
+The first target is a leaderboard proxy, not the full playerbase:
+
+- `mean_acc`: average accuracy among fetched scores
+- `acc_std`: accuracy spread
+- `skill_gap`: average top 10% accuracy minus average bottom 50% accuracy
+
+The osu! API only exposes the visible score data we can reasonably fetch, so the
+labels should be read as "top leaderboard performance descriptors".
+
+## Quick Smoke Test Without osu! API
+
+Local setup uses Python 3.12 in this repo because the default Python on this
+machine is 3.14 and did not have torch installed.
+
+Install dependencies with uv:
+
+```powershell
+uv venv --python 3.12 .venv
+uv pip install -e .
+```
+
+Or with regular Python/pip:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Create a tiny synthetic dataset:
+
+```powershell
+python -m mania_difficulty.tools.make_synthetic_dataset --maps 96 --out data/processed/synthetic
+```
+
+Train for a short run:
+
+```powershell
+python -m mania_difficulty.train `
+  --labels data/processed/synthetic/labels.csv `
+  --sequences data/processed/synthetic/sequences `
+  --epochs 8 `
+  --batch-size 16 `
+  --run-name synthetic_smoke
+```
+
+Open the generated report:
+
+```powershell
+start outputs/runs/synthetic_smoke/run_report.html
+```
+
+Each run saves:
+
+- `history.csv`: train/val loss per epoch
+- `learning_curve.png`: growth curve
+- `predictions.csv`: actual model outputs on the test split
+- `prediction_scatter.png`: predicted vs actual plots
+- `metrics.json`: MAE and R2 per target
+- `best_model.pt`: checkpoint for prediction
+
+## Real Data Pipeline
+
+Set osu! API credentials first:
+
+```powershell
+$env:OSU_CLIENT_ID="your_client_id"
+$env:OSU_CLIENT_SECRET="your_client_secret"
+```
+
+Fetch ranked 4K mania map metadata:
+
+```powershell
+python -m mania_difficulty.data.fetch_maps --target 2000 --out data/raw/beatmaps.csv
+```
+
+Download `.osu` files through the configured mirror:
+
+```powershell
+python -m mania_difficulty.data.fetch_osu_files `
+  --maps data/raw/beatmaps.csv `
+  --out-dir data/raw/osu
+```
+
+Parse note tensors:
+
+```powershell
+python -m mania_difficulty.data.parse_notes `
+  --maps data/raw/beatmaps.csv `
+  --osu-dir data/raw/osu `
+  --out-dir data/processed/sequences
+```
+
+Fetch score labels:
+
+```powershell
+python -m mania_difficulty.data.fetch_scores `
+  --maps data/raw/beatmaps.csv `
+  --out data/processed/labels.csv `
+  --min-scores 30
+```
+
+Train:
+
+```powershell
+python -m mania_difficulty.train `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --epochs 50 `
+  --batch-size 32 `
+  --run-name lstm_top100_baseline
+```
+
+Predict one `.osu` file after training:
+
+```powershell
+python -m mania_difficulty.predict `
+  --checkpoint outputs/runs/lstm_top100_baseline/best_model.pt `
+  --osu data/raw/osu/123456.osu
+```
+
+## Colab / VS Code Colab Path
+
+If local training is too slow, use `notebooks/colab_train.ipynb`.
+
+Recommended workflow:
+
+1. Commit this repo and push it to GitHub.
+2. Open the notebook in Google Colab, or through the official Colab VS Code
+   extension.
+3. Set `REPO_URL` in the first notebook cell.
+4. Enable a GPU runtime.
+5. Run the cells to install the project, train, and display the learning curve.
+
+The notebook includes a synthetic smoke path and a real-data path. For real
+data, keep API credentials in the notebook session only; do not commit them.
+
+## Notes
+
+- The fetch scripts cache files and skip data that already exists.
+- Score fetching sleeps between requests by default.
+- `fetch_maps.py` uses osu!'s current `beatmapsets/search` API shape and filters
+  for 4K mania beatmaps from the returned beatmapsets.
+- The model starts with LSTM because it is easier to train and debug. Transformer
+  attention analysis can come after the baseline is trustworthy.

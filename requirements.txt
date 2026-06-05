@@ -1,0 +1,7 @@
+torch>=2.0
+numpy
+pandas
+requests
+matplotlib
+scikit-learn
+tqdm

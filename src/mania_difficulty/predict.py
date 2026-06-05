@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+import torch
+
+from mania_difficulty.data.parse_notes import parse_osu_file
+from mania_difficulty.models.lstm import LSTMDifficultyModel
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Predict difficulty descriptors for one .osu file.")
+    parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument("--osu", type=Path, required=True)
+    parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--device", default="")
+    args = parser.parse_args()
+
+    device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    checkpoint = torch.load(args.checkpoint, map_location=device)
+    model = LSTMDifficultyModel(**checkpoint["model_config"]).to(device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    features = np.asarray(parse_osu_file(args.osu), dtype="float32")
+    max_notes = int(checkpoint.get("max_notes", 3000))
+    if len(features) == 0:
+        raise RuntimeError(f"No notes found in {args.osu}")
+    features = features[:max_notes]
+
+    with torch.no_grad():
+        pred_norm = model(
+            torch.from_numpy(features[None, :, :]).to(device),
+            torch.tensor([len(features)], dtype=torch.long, device=device),
+        ).cpu().numpy()[0]
+
+    target_mean = np.asarray(checkpoint["target_mean"], dtype="float32")
+    target_std = np.asarray(checkpoint["target_std"], dtype="float32")
+    pred = pred_norm * target_std + target_mean
+    result = {
+        "osu_file": str(args.osu),
+        "num_notes_used": int(len(features)),
+        "predictions": {
+            column: float(pred[index])
+            for index, column in enumerate(checkpoint["target_columns"])
+        },
+    }
+
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,311 @@
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import random
+from functools import partial
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Subset
+
+from mania_difficulty.data.dataset import (
+    DEFAULT_TARGET_COLUMNS,
+    ManiaDifficultyDataset,
+    collate_batch,
+)
+from mania_difficulty.metrics import regression_report
+from mania_difficulty.models.lstm import LSTMDifficultyModel
+from mania_difficulty.visualize import (
+    plot_learning_curve,
+    plot_prediction_scatter,
+    write_run_report,
+)
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def split_indices(size: int, seed: int) -> tuple[list[int], list[int], list[int]]:
+    indices = list(range(size))
+    random.Random(seed).shuffle(indices)
+    train_end = int(size * 0.8)
+    val_end = int(size * 0.9)
+    return indices[:train_end], indices[train_end:val_end], indices[val_end:]
+
+
+def target_stats(dataset: ManiaDifficultyDataset, indices: list[int]) -> tuple[np.ndarray, np.ndarray]:
+    targets = []
+    for index in indices:
+        targets.append(dataset[index]["targets"])
+    array = np.stack(targets).astype("float32")
+    mean = array.mean(axis=0)
+    std = array.std(axis=0)
+    std[std < 1e-6] = 1.0
+    return mean, std
+
+
+def transform_targets(targets: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
+    return (targets - mean) / std
+
+
+def inverse_transform(array: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.ndarray:
+    return array * std + mean
+
+
+def weighted_huber_loss(pred: torch.Tensor, target: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    loss = nn.functional.huber_loss(pred, target, reduction="none", delta=1.0)
+    return (loss * weights).mean()
+
+
+@torch.no_grad()
+def evaluate_loader(
+    model: LSTMDifficultyModel,
+    loader: DataLoader,
+    device: torch.device,
+    target_mean_t: torch.Tensor,
+    target_std_t: torch.Tensor,
+    target_mean_np: np.ndarray,
+    target_std_np: np.ndarray,
+) -> tuple[float, np.ndarray, np.ndarray, list[int]]:
+    model.eval()
+    losses = []
+    pred_chunks = []
+    actual_chunks = []
+    beatmap_ids: list[int] = []
+    weights = torch.ones(target_mean_t.shape[0], device=device)
+
+    for batch in loader:
+        features = batch.features.to(device)
+        lengths = batch.lengths.to(device)
+        targets = batch.targets.to(device)
+        normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
+        normalized_pred = model(features, lengths)
+        loss = weighted_huber_loss(normalized_pred, normalized_targets, weights)
+        losses.append(float(loss.item()))
+
+        pred = inverse_transform(normalized_pred.cpu().numpy(), target_mean_np, target_std_np)
+        actual = targets.cpu().numpy()
+        pred_chunks.append(pred)
+        actual_chunks.append(actual)
+        beatmap_ids.extend(batch.beatmap_ids)
+
+    return (
+        float(np.mean(losses)) if losses else 0.0,
+        np.concatenate(pred_chunks, axis=0),
+        np.concatenate(actual_chunks, axis=0),
+        beatmap_ids,
+    )
+
+
+def write_history_header(path: Path) -> None:
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["epoch", "train_loss", "val_loss"])
+        writer.writeheader()
+
+
+def append_history(path: Path, epoch: int, train_loss: float, val_loss: float) -> None:
+    with path.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["epoch", "train_loss", "val_loss"])
+        writer.writerow({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
+
+
+def write_predictions(
+    path: Path,
+    beatmap_ids: list[int],
+    actual: np.ndarray,
+    pred: np.ndarray,
+    target_columns: list[str],
+) -> None:
+    rows = []
+    for index, beatmap_id in enumerate(beatmap_ids):
+        row = {"beatmap_id": beatmap_id}
+        for target_index, column in enumerate(target_columns):
+            row[f"actual_{column}"] = float(actual[index, target_index])
+            row[f"pred_{column}"] = float(pred[index, target_index])
+            row[f"error_{column}"] = float(pred[index, target_index] - actual[index, target_index])
+        rows.append(row)
+
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def train(args: argparse.Namespace) -> Path:
+    seed_everything(args.seed)
+    target_columns = [column.strip() for column in args.targets.split(",") if column.strip()]
+    run_dir = Path("outputs/runs") / args.run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    dataset = ManiaDifficultyDataset(args.labels, args.sequences, target_columns=target_columns)
+    if len(dataset) < 10:
+        raise RuntimeError("Need at least 10 maps for train/val/test split.")
+
+    train_indices, val_indices, test_indices = split_indices(len(dataset), args.seed)
+    target_mean_np, target_std_np = target_stats(dataset, train_indices)
+
+    collate = partial(collate_batch, max_notes=args.max_notes)
+    train_loader = DataLoader(
+        Subset(dataset, train_indices),
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=collate,
+    )
+    val_loader = DataLoader(
+        Subset(dataset, val_indices),
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=collate,
+    )
+    test_loader = DataLoader(
+        Subset(dataset, test_indices),
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=collate,
+    )
+
+    device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    model = LSTMDifficultyModel(output_dim=len(target_columns)).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
+    target_mean_t = torch.tensor(target_mean_np, dtype=torch.float32, device=device)
+    target_std_t = torch.tensor(target_std_np, dtype=torch.float32, device=device)
+    loss_weights = torch.tensor(args.loss_weights, dtype=torch.float32, device=device)
+    if loss_weights.numel() != len(target_columns):
+        loss_weights = torch.ones(len(target_columns), dtype=torch.float32, device=device)
+
+    history_csv = run_dir / "history.csv"
+    write_history_header(history_csv)
+
+    best_val_loss = float("inf")
+    best_epoch = 0
+    patience_left = args.patience
+    checkpoint_path = run_dir / "best_model.pt"
+
+    for epoch in range(1, args.epochs + 1):
+        model.train()
+        train_losses = []
+        for batch in train_loader:
+            features = batch.features.to(device)
+            lengths = batch.lengths.to(device)
+            targets = batch.targets.to(device)
+            normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
+
+            optimizer.zero_grad(set_to_none=True)
+            pred = model(features, lengths)
+            loss = weighted_huber_loss(pred, normalized_targets, loss_weights)
+            loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            train_losses.append(float(loss.item()))
+
+        scheduler.step()
+        train_loss = float(np.mean(train_losses))
+        val_loss, _, _, _ = evaluate_loader(
+            model,
+            val_loader,
+            device,
+            target_mean_t,
+            target_std_t,
+            target_mean_np,
+            target_std_np,
+        )
+        append_history(history_csv, epoch, train_loss, val_loss)
+        print(f"epoch={epoch:03d} train_loss={train_loss:.5f} val_loss={val_loss:.5f}")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = epoch
+            patience_left = args.patience
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "model_config": model.config,
+                    "target_columns": target_columns,
+                    "target_mean": target_mean_np.tolist(),
+                    "target_std": target_std_np.tolist(),
+                    "max_notes": args.max_notes,
+                    "best_epoch": best_epoch,
+                },
+                checkpoint_path,
+            )
+        else:
+            patience_left -= 1
+            if patience_left <= 0:
+                print(f"Early stopping at epoch {epoch}; best epoch was {best_epoch}.")
+                break
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    test_loss, pred, actual, beatmap_ids = evaluate_loader(
+        model,
+        test_loader,
+        device,
+        target_mean_t,
+        target_std_t,
+        target_mean_np,
+        target_std_np,
+    )
+    predictions_csv = run_dir / "predictions.csv"
+    write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+
+    metrics = regression_report(actual, pred, target_columns)
+    metrics["_run"] = {
+        "best_epoch": best_epoch,
+        "best_val_loss": best_val_loss,
+        "test_loss": test_loss,
+        "train_size": len(train_indices),
+        "val_size": len(val_indices),
+        "test_size": len(test_indices),
+    }
+    metrics_path = run_dir / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+
+    plot_learning_curve(history_csv, run_dir / "learning_curve.png")
+    plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
+    write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
+
+    (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2, default=str), encoding="utf-8")
+    print(f"Run artifacts written to {run_dir}")
+    return run_dir
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train the LSTM mania difficulty baseline.")
+    parser.add_argument("--labels", type=Path, required=True)
+    parser.add_argument("--sequences", type=Path, required=True)
+    parser.add_argument("--run-name", default="lstm_baseline")
+    parser.add_argument("--targets", default=",".join(DEFAULT_TARGET_COLUMNS))
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--max-notes", type=int, default=3000)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--device", default="")
+    parser.add_argument(
+        "--loss-weights",
+        type=float,
+        nargs="*",
+        default=[1.0, 0.5, 0.5],
+        help="Weights matching --targets. Falls back to all ones if the count differs.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    train(parse_args())
+
+
+if __name__ == "__main__":
+    main()

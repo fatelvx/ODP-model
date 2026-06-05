@@ -1,0 +1,23 @@
+[project]
+name = "mania-difficulty-model"
+version = "0.1.0"
+description = "osu!mania 4K raw note difficulty prediction baseline"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.0",
+  "numpy",
+  "pandas",
+  "requests",
+  "matplotlib",
+  "scikit-learn",
+  "tqdm",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

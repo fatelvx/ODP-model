@@ -36,7 +36,7 @@ def fetch_score_labels(
     rows: list[dict[str, Any]] = []
     for beatmap in tqdm(maps, desc="scores"):
         beatmap_id = beatmap["beatmap_id"]
-        params: dict[str, Any] = {"mode": "mania"}
+        params: dict[str, Any] = {"mode": "mania", "limit": 100}
         if mods:
             params["mods"] = mods
 

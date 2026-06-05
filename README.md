@@ -43,7 +43,7 @@ Create a tiny synthetic dataset:
 python -m mania_difficulty.tools.make_synthetic_dataset --maps 96 --out data/processed/synthetic
 ```
 
-Train for a short run:
+Train a fast CPU baseline for a short run:
 
 ```powershell
 python -m mania_difficulty.train `
@@ -51,6 +51,7 @@ python -m mania_difficulty.train `
   --sequences data/processed/synthetic/sequences `
   --epochs 8 `
   --batch-size 16 `
+  --model summary `
   --run-name synthetic_smoke
 ```
 
@@ -65,6 +66,7 @@ Each run saves:
 - `history.csv`: train/val loss per epoch
 - `learning_curve.png`: growth curve
 - `predictions.csv`: actual model outputs on the test split
+- `human_review.csv`: maps worth checking by hand
 - `prediction_scatter.png`: predicted vs actual plots
 - `metrics.json`: MAE and R2 per target
 - `best_model.pt`: checkpoint for prediction
@@ -118,8 +120,13 @@ python -m mania_difficulty.train `
   --sequences data/processed/sequences `
   --epochs 50 `
   --batch-size 32 `
+  --model lstm `
   --run-name lstm_top100_baseline
 ```
+
+For local CPU pilots, use `--model summary`. It is much faster and is meant to
+prove the data/label signal before spending GPU time. Use `--model lstm` in
+Colab or on a GPU machine.
 
 Predict one `.osu` file after training:
 

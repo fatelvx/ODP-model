@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
 from mania_difficulty.metrics import regression_report
-from mania_difficulty.models.lstm import LSTMDifficultyModel
+from mania_difficulty.models.factory import create_model
 from mania_difficulty.train import evaluate_loader, write_predictions
 from mania_difficulty.visualize import plot_prediction_scatter, write_run_report
 
@@ -42,7 +42,11 @@ def main() -> None:
         collate_fn=partial(collate_batch, max_notes=int(checkpoint.get("max_notes", 3000))),
     )
 
-    model = LSTMDifficultyModel(**checkpoint["model_config"]).to(device)
+    model = create_model(
+        checkpoint.get("model_name", "lstm"),
+        output_dim=len(target_columns),
+        config=checkpoint["model_config"],
+    ).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     _, pred, actual, beatmap_ids = evaluate_loader(

@@ -8,6 +8,7 @@ from functools import partial
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Subset
@@ -18,7 +19,7 @@ from mania_difficulty.data.dataset import (
     collate_batch,
 )
 from mania_difficulty.metrics import regression_report
-from mania_difficulty.models.lstm import LSTMDifficultyModel
+from mania_difficulty.models.factory import create_model
 from mania_difficulty.visualize import (
     plot_learning_curve,
     plot_prediction_scatter,
@@ -68,7 +69,7 @@ def weighted_huber_loss(pred: torch.Tensor, target: torch.Tensor, weights: torch
 
 @torch.no_grad()
 def evaluate_loader(
-    model: LSTMDifficultyModel,
+    model: torch.nn.Module,
     loader: DataLoader,
     device: torch.device,
     target_mean_t: torch.Tensor,
@@ -140,6 +141,57 @@ def write_predictions(
         writer.writerows(rows)
 
 
+def write_human_review(
+    path: Path,
+    labels_csv: Path,
+    predictions_csv: Path,
+    target_columns: list[str],
+    *,
+    top_n: int = 10,
+) -> None:
+    labels = pd.read_csv(labels_csv)
+    predictions = pd.read_csv(predictions_csv)
+    merged = predictions.merge(labels, on="beatmap_id", how="left", suffixes=("", "_label"))
+    if merged.empty:
+        return
+
+    rows = []
+
+    def add_candidates(frame: pd.DataFrame, reason: str) -> None:
+        for _, row in frame.iterrows():
+            output = {
+                "review_reason": reason,
+                "beatmap_id": int(row["beatmap_id"]),
+                "title": row.get("title", ""),
+                "artist": row.get("artist", ""),
+                "mapper": row.get("mapper", ""),
+                "version": row.get("version", ""),
+            }
+            for column in target_columns:
+                output[f"observed_{column}"] = row.get(f"actual_{column}")
+                output[f"predicted_{column}"] = row.get(f"pred_{column}")
+                output[f"error_{column}"] = row.get(f"error_{column}")
+            rows.append(output)
+
+    if "pred_mean_acc" in merged:
+        add_candidates(
+            merged.sort_values("pred_mean_acc", ascending=True).head(top_n),
+            "model_lowest_predicted_mean_acc",
+        )
+    if "actual_mean_acc" in merged:
+        add_candidates(
+            merged.sort_values("actual_mean_acc", ascending=True).head(top_n),
+            "observed_lowest_mean_acc",
+        )
+        add_candidates(
+            merged.reindex(merged["error_mean_acc"].abs().sort_values(ascending=False).index).head(top_n),
+            "largest_mean_acc_disagreement",
+        )
+
+    review = pd.DataFrame(rows).drop_duplicates(["review_reason", "beatmap_id"])
+    review.to_csv(path, index=False, encoding="utf-8")
+
+
 def train(args: argparse.Namespace) -> Path:
     seed_everything(args.seed)
     target_columns = [column.strip() for column in args.targets.split(",") if column.strip()]
@@ -174,7 +226,7 @@ def train(args: argparse.Namespace) -> Path:
     )
 
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
-    model = LSTMDifficultyModel(output_dim=len(target_columns)).to(device)
+    model = create_model(args.model, output_dim=len(target_columns)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
     target_mean_t = torch.tensor(target_mean_np, dtype=torch.float32, device=device)
@@ -229,6 +281,7 @@ def train(args: argparse.Namespace) -> Path:
             torch.save(
                 {
                     "model_state_dict": model.state_dict(),
+                    "model_name": args.model,
                     "model_config": model.config,
                     "target_columns": target_columns,
                     "target_mean": target_mean_np.tolist(),
@@ -257,6 +310,7 @@ def train(args: argparse.Namespace) -> Path:
     )
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+    write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
 
     metrics = regression_report(actual, pred, target_columns)
     metrics["_run"] = {
@@ -293,6 +347,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-notes", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="")
+    parser.add_argument(
+        "--model",
+        choices=["summary", "lstm"],
+        default="lstm",
+        help="Use summary for fast CPU pilots; use lstm for the sequence baseline.",
+    )
     parser.add_argument(
         "--loss-weights",
         type=float,

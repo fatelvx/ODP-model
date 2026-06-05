@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from mania_difficulty.data.parse_notes import parse_osu_file
-from mania_difficulty.models.lstm import LSTMDifficultyModel
+from mania_difficulty.models.factory import create_model
 
 
 def main() -> None:
@@ -21,7 +21,11 @@ def main() -> None:
 
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    model = LSTMDifficultyModel(**checkpoint["model_config"]).to(device)
+    model = create_model(
+        checkpoint.get("model_name", "lstm"),
+        output_dim=len(checkpoint["target_columns"]),
+        config=checkpoint["model_config"],
+    ).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 

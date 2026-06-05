@@ -9,7 +9,10 @@ import requests
 from tqdm import tqdm
 
 
-DEFAULT_MIRRORS = ["https://api.chimu.moe/v1/osu/{beatmap_id}"]
+DEFAULT_MIRRORS = [
+    "https://osu.ppy.sh/osu/{beatmap_id}",
+    "https://api.chimu.moe/v1/osu/{beatmap_id}",
+]
 
 
 def read_map_ids(path: Path) -> list[str]:

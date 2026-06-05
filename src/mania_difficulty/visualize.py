@@ -43,8 +43,8 @@ def plot_prediction_scatter(
         low = min(actual.min(), predicted.min())
         high = max(actual.max(), predicted.max())
         ax.plot([low, high], [low, high], color="black", linewidth=1)
-        ax.set_xlabel(f"Actual {column}")
-        ax.set_ylabel(f"Predicted {column}")
+        ax.set_xlabel(f"Observed top100 proxy {column}")
+        ax.set_ylabel(f"Predicted top100 proxy {column}")
         ax.set_title(column)
         ax.grid(True, alpha=0.25)
 
@@ -112,10 +112,11 @@ def write_run_report(
   {metrics_html}
   <h2>Learning Curve</h2>
   {learning_curve_html}
-  <h2>Predicted vs Actual</h2>
+  <h2>Predicted vs Observed Proxy</h2>
   {scatter_html}
   <h2>Files</h2>
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
+  <p>Open <code>human_review.csv</code> for maps that need human judgment.</p>
 </body>
 </html>
 """

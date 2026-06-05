@@ -2,6 +2,8 @@
 
 Raw-note osu!mania 4K difficulty prediction from leaderboard accuracy data.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/fatelvx/ODP-model/blob/main/notebooks/colab_train.ipynb)
+
 This repo is set up as a learning-friendly baseline: every training run saves
 human-readable outputs so we can see whether the model is improving instead of
 only staring at terminal logs.
@@ -142,13 +144,16 @@ If local training is too slow, use `notebooks/colab_train.ipynb`.
 
 Recommended workflow:
 
-1. Open the notebook in Google Colab, or through the official Colab VS Code
-   extension.
+1. Open the notebook through the badge above, Google Colab, or the official
+   Colab VS Code extension.
 2. Enable a GPU runtime.
 3. Run the cells to install the project, train, and display the learning curve.
 
 The notebook includes a synthetic smoke path and a real-data path. For real
 data, keep API credentials in the notebook session only; do not commit them.
+
+VS Code should recommend the official `google.colab` extension when this repo is
+opened.
 
 ## Notes
 

@@ -142,12 +142,10 @@ If local training is too slow, use `notebooks/colab_train.ipynb`.
 
 Recommended workflow:
 
-1. Commit this repo and push it to GitHub.
-2. Open the notebook in Google Colab, or through the official Colab VS Code
+1. Open the notebook in Google Colab, or through the official Colab VS Code
    extension.
-3. Set `REPO_URL` in the first notebook cell.
-4. Enable a GPU runtime.
-5. Run the cells to install the project, train, and display the learning curve.
+2. Enable a GPU runtime.
+3. Run the cells to install the project, train, and display the learning curve.
 
 The notebook includes a synthetic smoke path and a real-data path. For real
 data, keep API credentials in the notebook session only; do not commit them.

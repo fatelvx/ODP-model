@@ -7,12 +7,40 @@ from pathlib import Path
 import pandas as pd
 
 
+RUN_METADATA_COLUMNS = [
+    "device",
+    "requested_device",
+    "amp_enabled",
+    "effective_batch_size",
+    "grad_accum_steps",
+    "grad_clip_norm",
+    "loss",
+    "huber_delta",
+    "sample_weight_column",
+    "sample_weight_train_mean",
+    "sample_weight_train_downweighted_rate",
+    "checkpoint_metric",
+    "best_checkpoint_score",
+    "best_epoch",
+    "epochs_completed",
+    "stop_reason",
+    "early_stopped",
+    "git_commit",
+    "git_branch",
+    "git_dirty",
+    "git_status_entries",
+]
+
+
 def metrics_rows(run_dir: Path, metrics_path: Path, evaluation: str) -> list[dict[str, object]]:
     if not metrics_path.exists():
         raise FileNotFoundError(f"No {metrics_path.name} found in {run_dir}")
 
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     run_info = metrics.get("_run", {})
+    if not isinstance(run_info, dict):
+        run_info = {}
+    run_metadata = {column: run_info.get(column) for column in RUN_METADATA_COLUMNS}
     rows = []
     for target, values in metrics.items():
         if target.startswith("_") or not isinstance(values, dict):
@@ -27,6 +55,7 @@ def metrics_rows(run_dir: Path, metrics_path: Path, evaluation: str) -> list[dic
                 "split_strategy": run_info.get("split_strategy"),
                 "group_column": run_info.get("group_column"),
                 "group_count": run_info.get("group_count"),
+                **run_metadata,
                 "target": target,
                 "mae": values.get("mae"),
                 "r2": values.get("r2"),

@@ -376,6 +376,11 @@ python -m mania_difficulty.tools.compare_runs `
   outputs/runs/lstm_top100_baseline
 ```
 
+The comparison CSV/HTML repeats key run settings beside every target metric:
+device, AMP, effective batch size, gradient accumulation/clipping, loss and
+Huber delta, sample weighting, checkpoint choice, stop reason, and git revision.
+That makes Colab output easier to sort without opening each run report.
+
 Project the model's internal representation to 2D. For neural checkpoints this
 uses the pre-head embedding; for `tabular_forest` it uses the summary feature
 vector. The resulting plot helps check whether maps naturally cluster by

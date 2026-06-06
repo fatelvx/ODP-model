@@ -22,7 +22,28 @@ class CompareRunsTests(unittest.TestCase):
                     "difficulty_rating_baseline_mae": 0.25,
                     "mae_improvement_pct_vs_difficulty_rating_baseline": 0.2,
                 },
-                "_run": {"model_name": "tabular_forest", "evaluation": "holdout", "seed": 42},
+                "_run": {
+                    "model_name": "summary",
+                    "evaluation": "holdout",
+                    "seed": 42,
+                    "device": "cuda",
+                    "requested_device": "auto",
+                    "amp_enabled": True,
+                    "effective_batch_size": 64,
+                    "grad_accum_steps": 2,
+                    "grad_clip_norm": 0.75,
+                    "loss": "huber",
+                    "huber_delta": 0.5,
+                    "sample_weight_column": "score_count",
+                    "sample_weight_train_mean": 0.72,
+                    "sample_weight_train_downweighted_rate": 0.4,
+                    "checkpoint_metric": "val_mean_mae",
+                    "best_checkpoint_score": 0.12,
+                    "epochs_completed": 3,
+                    "stop_reason": "early_stopping",
+                    "git_commit": "abc1234",
+                    "git_dirty": False,
+                },
             }
             cv_metrics = {
                 "mean_acc": {
@@ -50,6 +71,22 @@ class CompareRunsTests(unittest.TestCase):
         self.assertEqual(rows[0]["mae_improvement_pct_vs_difficulty_rating_baseline"], 0.2)
         self.assertEqual(rows[0]["spearman"], 0.8)
         self.assertEqual(rows[0]["pairwise_order_accuracy"], 0.75)
+        self.assertEqual(rows[0]["device"], "cuda")
+        self.assertTrue(rows[0]["amp_enabled"])
+        self.assertEqual(rows[0]["effective_batch_size"], 64)
+        self.assertEqual(rows[0]["grad_accum_steps"], 2)
+        self.assertEqual(rows[0]["grad_clip_norm"], 0.75)
+        self.assertEqual(rows[0]["loss"], "huber")
+        self.assertEqual(rows[0]["huber_delta"], 0.5)
+        self.assertEqual(rows[0]["sample_weight_column"], "score_count")
+        self.assertEqual(rows[0]["sample_weight_train_mean"], 0.72)
+        self.assertEqual(rows[0]["sample_weight_train_downweighted_rate"], 0.4)
+        self.assertEqual(rows[0]["checkpoint_metric"], "val_mean_mae")
+        self.assertEqual(rows[0]["best_checkpoint_score"], 0.12)
+        self.assertEqual(rows[0]["epochs_completed"], 3)
+        self.assertEqual(rows[0]["stop_reason"], "early_stopping")
+        self.assertEqual(rows[0]["git_commit"], "abc1234")
+        self.assertFalse(rows[0]["git_dirty"])
 
 
 if __name__ == "__main__":

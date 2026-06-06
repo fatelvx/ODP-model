@@ -30,7 +30,7 @@ class SummaryDifficultyModel(nn.Module):
             nn.Linear(hidden_dim // 2, output_dim),
         )
 
-    def forward(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+    def summarize(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         mask = torch.arange(features.size(1), device=features.device)[None, :] < lengths[:, None].to(
             features.device
         )
@@ -47,5 +47,13 @@ class SummaryDifficultyModel(nn.Module):
         maxes = torch.where(mask_f, features, very_negative).max(dim=1).values
         note_count = torch.log1p(lengths.to(features.device).float()).unsqueeze(-1) / 10.0
 
-        summary = torch.cat([means, stds, maxes, note_count], dim=1)
-        return self.net(summary)
+        return torch.cat([means, stds, maxes, note_count], dim=1)
+
+    def encode(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        encoded = self.summarize(features, lengths)
+        for layer in list(self.net.children())[:-1]:
+            encoded = layer(encoded)
+        return encoded
+
+    def forward(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        return self.net(self.summarize(features, lengths))

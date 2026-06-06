@@ -43,7 +43,7 @@ class LSTMDifficultyModel(nn.Module):
             nn.Linear(128, output_dim),
         )
 
-    def forward(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+    def encode(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         embedded = self.note_embedding(features)
         packed = pack_padded_sequence(
             embedded,
@@ -59,4 +59,8 @@ class LSTMDifficultyModel(nn.Module):
         )
         masked_output = output * mask.unsqueeze(-1)
         pooled = masked_output.sum(dim=1) / lengths.to(output.device).clamp_min(1).unsqueeze(-1)
+        return pooled
+
+    def forward(self, features: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        pooled = self.encode(features, lengths)
         return self.head(pooled)

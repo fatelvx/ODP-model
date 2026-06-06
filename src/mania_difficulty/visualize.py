@@ -235,6 +235,21 @@ def write_run_report(
         if feature_importance_name and (run_dir / feature_importance_name).exists()
         else ""
     )
+    embedding_html = ""
+    embedding_png = run_dir / "embedding_projection.png"
+    embedding_report = run_dir / "embedding_report.html"
+    if embedding_png.exists() or embedding_report.exists():
+        report_link = (
+            '<p><a href="embedding_report.html">embedding_report.html</a></p>'
+            if embedding_report.exists()
+            else ""
+        )
+        image_html = (
+            '<p><img src="embedding_projection.png" alt="Embedding projection"></p>'
+            if embedding_png.exists()
+            else ""
+        )
+        embedding_html = f"<h2>Embedding Projection</h2>{report_link}{image_html}"
     review_html = review_sections_html(run_dir)
 
     report = f"""<!doctype html>
@@ -265,6 +280,7 @@ def write_run_report(
   <h2>Predicted vs Observed Proxy</h2>
   {scatter_html}
   {f"<h2>Feature Importance</h2>{feature_importance_html}" if feature_importance_html else ""}
+  {embedding_html}
   {review_html}
   <h2>Files</h2>
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
@@ -272,6 +288,7 @@ def write_run_report(
   <p>Open <code>human_pair_review.csv</code> to compare map pairs where the ranking disagrees.</p>
   <p>Fill <code>human_pair_judgment_template.csv</code>, then score it with <code>python -m mania_difficulty.tools.human_judgments score</code>.</p>
   <p>Open <code>error_slices.csv</code> to see where metadata bins have larger errors.</p>
+  <p>Open <code>embedding_report.html</code> to inspect whether model embeddings cluster into meaningful map groups.</p>
 </body>
 </html>
 """

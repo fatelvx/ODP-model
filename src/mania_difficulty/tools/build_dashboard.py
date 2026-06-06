@@ -170,6 +170,8 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         link(run_dir / "human_review.csv", "human review", out_html),
         link(run_dir / "human_pair_review.csv", "pairwise review", out_html),
         link(run_dir / "human_pair_judgment_template.csv", "judgment template", out_html),
+        link(run_dir / "embedding_report.html", "embedding report", out_html),
+        link(run_dir / "embedding_projection.csv", "embedding CSV", out_html),
         link(run_dir / "error_slices.csv", "error slices", out_html),
         link(run_dir / "cv_human_review.csv", "CV human review", out_html),
         link(run_dir / "cv_human_pair_judgment_template.csv", "CV judgment template", out_html),
@@ -181,6 +183,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
             image(run_dir / "learning_curve.png", f"{run_dir.name} learning curve", out_html),
             image(run_dir / "prediction_scatter.png", f"{run_dir.name} prediction scatter", out_html),
             image(run_dir / "cv_prediction_scatter.png", f"{run_dir.name} CV prediction scatter", out_html),
+            image(run_dir / "embedding_projection.png", f"{run_dir.name} embedding projection", out_html),
             image(run_dir / "feature_importance.png", f"{run_dir.name} feature importance", out_html),
         ]
     )

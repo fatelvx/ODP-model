@@ -110,6 +110,7 @@ Each run saves:
 - `human_pair_judgment_template.csv`: fillable CSV for scoring model/proxy agreement with human judgment
 - `error_slices.csv`: mean-accuracy error grouped by metadata bins such as score count and note count
 - `prediction_scatter.png`: predicted vs actual plots
+- `embedding_projection.csv`, `embedding_projection.png`, `embedding_report.html`: 2D model embedding projection when `project_embeddings` is run
 - `cv_metrics.json`: K-fold out-of-fold metrics when `--cv-folds` is enabled
 - `cv_human_pair_review.csv`: cross-validation pairwise disagreements when `--cv-folds` is enabled
 - `cv_human_pair_judgment_template.csv`: fillable out-of-fold human judgment CSV
@@ -286,6 +287,20 @@ Compare runs:
 python -m mania_difficulty.tools.compare_runs `
   outputs/runs/forest_top100_baseline `
   outputs/runs/lstm_top100_baseline
+```
+
+Project the model's internal representation to 2D. For neural checkpoints this
+uses the pre-head embedding; for `tabular_forest` it uses the summary feature
+vector. The resulting plot helps check whether maps naturally cluster by
+difficulty shape:
+
+```powershell
+python -m mania_difficulty.tools.project_embeddings `
+  --checkpoint outputs/runs/lstm_top100_baseline/best_model.pt `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --method pca `
+  --color-target mean_acc
 ```
 
 Build one dashboard that links the audit, sweeps, comparison, metrics, plots,

@@ -19,6 +19,12 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "run_report.html").write_text("<html>run</html>", encoding="utf-8")
             (run_dir / "learning_curve.png").write_bytes(b"png")
             (run_dir / "prediction_scatter.png").write_bytes(b"png")
+            (run_dir / "embedding_projection.png").write_bytes(b"png")
+            (run_dir / "embedding_report.html").write_text("<html>embeddings</html>", encoding="utf-8")
+            (run_dir / "embedding_projection.csv").write_text(
+                "beatmap_id,projection_x,projection_y\n1,0.0,1.0\n",
+                encoding="utf-8",
+            )
             (run_dir / "human_pair_judgment_template.csv").write_text(
                 "\n".join(
                     [
@@ -62,6 +68,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("run_a", html)
         self.assertIn("run_report.html", html)
         self.assertIn("learning_curve.png", html)
+        self.assertIn("embedding_report.html", html)
+        self.assertIn("embedding_projection.png", html)
         self.assertIn("mean_acc", html)
         self.assertIn("Dataset Audit", html)
         self.assertIn("best_forest", html)

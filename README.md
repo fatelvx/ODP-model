@@ -104,7 +104,7 @@ Each run saves:
 
 - `history.csv`: train/val loss, validation MAE, validation pairwise order, epoch seconds, LR, and CUDA peak memory per epoch
 - `learning_curve.png`: loss curve plus validation MAE / pairwise-order curve when available
-- `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, and fragile metadata-bin checks
+- `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, baseline wins, and fragile metadata-bin checks
 - `predictions.csv`: actual model outputs on the test split
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand
@@ -136,7 +136,9 @@ When labels include osu!'s `difficulty_rating`, training also fits a simple
 linear `difficulty_rating -> target` baseline on the training split and reports
 `difficulty_rating_baseline_mae` plus improvement vs that baseline. This tells
 us whether the sequence model is beating a basic existing difficulty signal,
-not just the train-mean baseline.
+not just the train-mean baseline. Run reports and dashboards summarize this as
+`Targets Beating Difficulty Rating` and `Mean Difficulty Rating Improvement`
+when the baseline is available.
 
 When the label file has `beatmapset_id`, train/validation/test and
 cross-validation splits keep the same beatmapset in only one split. This avoids

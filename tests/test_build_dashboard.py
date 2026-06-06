@@ -74,7 +74,14 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "metrics.json").write_text(
                 json.dumps(
                     {
-                        "mean_acc": {"mae": 0.1, "spearman": 0.5, "pairwise_order_accuracy": 0.75},
+                        "mean_acc": {
+                            "mae": 0.1,
+                            "spearman": 0.5,
+                            "pairwise_order_accuracy": 0.75,
+                            "difficulty_rating_baseline_mae": 0.15,
+                            "mae_improvement_vs_difficulty_rating_baseline": 0.05,
+                            "mae_improvement_pct_vs_difficulty_rating_baseline": 1 / 3,
+                        },
                         "acc_std": {
                             "mae": 0.2,
                             "spearman": 0.4,
@@ -162,6 +169,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Peak CUDA Memory MB", html)
         self.assertIn("Model Verdict", html)
         self.assertIn("Targets Beating Baseline", html)
+        self.assertIn("Targets Beating Difficulty Rating", html)
+        self.assertIn("Mean Difficulty Rating Improvement", html)
         self.assertIn("Weakest Target", html)
         self.assertIn("Worst Error Slices", html)
         self.assertIn("score_count: high", html)

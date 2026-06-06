@@ -341,8 +341,11 @@ def model_verdict_summary(metrics: dict, target_columns: list[str] | None = None
     pairwise_values: list[float] = []
     spearman_values: list[float] = []
     improvement_values: list[float] = []
+    difficulty_improvement_values: list[float] = []
     baseline_targets = 0
     beating_baseline = 0
+    difficulty_baseline_targets = 0
+    beating_difficulty_baseline = 0
     for target in targets:
         values = metrics.get(target, {})
         mae = metric_float(values.get("mae"))
@@ -360,12 +363,22 @@ def model_verdict_summary(metrics: dict, target_columns: list[str] | None = None
             improvement_values.append(improvement)
             if improvement > 0:
                 beating_baseline += 1
+        difficulty_improvement = metric_float(
+            values.get("mae_improvement_pct_vs_difficulty_rating_baseline")
+        )
+        if difficulty_improvement is not None:
+            difficulty_baseline_targets += 1
+            difficulty_improvement_values.append(difficulty_improvement)
+            if difficulty_improvement > 0:
+                beating_difficulty_baseline += 1
 
     weakest_target = max(mae_values, key=lambda item: item[1])[0] if mae_values else ""
     summary: dict[str, object] = {
         "target_count": len(targets),
         "baseline_target_count": baseline_targets,
         "targets_beating_baseline": beating_baseline,
+        "difficulty_baseline_target_count": difficulty_baseline_targets,
+        "targets_beating_difficulty_rating_baseline": beating_difficulty_baseline,
         "weakest_target": weakest_target,
     }
     if mae_values:
@@ -376,6 +389,10 @@ def model_verdict_summary(metrics: dict, target_columns: list[str] | None = None
         summary["mean_spearman"] = sum(spearman_values) / len(spearman_values)
     if improvement_values:
         summary["mean_improvement_pct"] = sum(improvement_values) / len(improvement_values)
+    if difficulty_improvement_values:
+        summary["mean_difficulty_rating_improvement_pct"] = sum(
+            difficulty_improvement_values
+        ) / len(difficulty_improvement_values)
     return summary
 
 
@@ -396,6 +413,16 @@ def model_verdict_html(
             f"{summary['targets_beating_baseline']} / {summary['baseline_target_count']}",
         ),
     ]
+    if summary["difficulty_baseline_target_count"]:
+        rows.append(
+            (
+                "Targets Beating Difficulty Rating",
+                (
+                    f"{summary['targets_beating_difficulty_rating_baseline']}"
+                    f" / {summary['difficulty_baseline_target_count']}"
+                ),
+            )
+        )
     if "mean_mae" in summary:
         rows.append(("Mean MAE", f"{summary['mean_mae']:.6f}"))
     if "mean_pairwise_order_accuracy" in summary:
@@ -404,6 +431,13 @@ def model_verdict_html(
         rows.append(("Mean Spearman", f"{summary['mean_spearman']:.4f}"))
     if "mean_improvement_pct" in summary:
         rows.append(("Mean Baseline Improvement", f"{summary['mean_improvement_pct'] * 100:.2f}%"))
+    if "mean_difficulty_rating_improvement_pct" in summary:
+        rows.append(
+            (
+                "Mean Difficulty Rating Improvement",
+                f"{summary['mean_difficulty_rating_improvement_pct'] * 100:.2f}%",
+            )
+        )
     rows.append(("Weakest Target", summary["weakest_target"]))
     row_html = "".join(
         f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"

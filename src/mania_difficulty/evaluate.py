@@ -13,6 +13,7 @@ from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
 from mania_difficulty.train import (
+    dataloader_options,
     evaluate_loader,
     write_human_review,
     write_pairwise_review,
@@ -29,6 +30,9 @@ def main() -> None:
     parser.add_argument("--out-dir", type=Path, default=None)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", default="")
+    parser.add_argument("--loader-workers", type=int, default=0)
+    parser.add_argument("--pin-memory", choices=["auto", "on", "off"], default="auto")
+    parser.add_argument("--loader-prefetch-factor", type=int, default=2)
     args = parser.parse_args()
 
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -45,6 +49,7 @@ def main() -> None:
         batch_size=args.batch_size,
         shuffle=False,
         collate_fn=partial(collate_batch, max_notes=int(checkpoint.get("max_notes", 3000))),
+        **dataloader_options(args, device),
     )
 
     model = create_model(

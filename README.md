@@ -250,6 +250,7 @@ python -m mania_difficulty.tools.sweep_neural `
   --lstm-head-dropouts 0.2 `
   --selection-metric mean_pairwise_order_accuracy `
   --max-candidates 4 `
+  --loader-workers 2 `
   --device cuda
 ```
 
@@ -258,6 +259,8 @@ The neural sweep writes `neural_sweep_summary.csv`,
 `neural_sweep_report.html`. Use `--selection-metric mean_mae` for absolute
 prediction error, or `--selection-metric mean_pairwise_order_accuracy` when the
 priority is choosing the same harder/easier direction a human would compare.
+On Colab or another Linux GPU runtime, use `--loader-workers 2` to keep the GPU
+fed. On local Windows CPU pilots, leave it at the default `0`.
 
 Compare runs:
 

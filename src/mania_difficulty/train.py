@@ -179,6 +179,24 @@ def weighted_huber_loss(pred: torch.Tensor, target: torch.Tensor, weights: torch
     return (loss * weights).mean()
 
 
+def dataloader_options(args: argparse.Namespace, device: torch.device) -> dict[str, object]:
+    worker_count = max(0, int(getattr(args, "loader_workers", 0)))
+    pin_memory_arg = getattr(args, "pin_memory", "auto")
+    if pin_memory_arg == "auto":
+        pin_memory = device.type == "cuda"
+    else:
+        pin_memory = pin_memory_arg == "on"
+
+    options: dict[str, object] = {
+        "num_workers": worker_count,
+        "pin_memory": pin_memory,
+    }
+    if worker_count > 0:
+        options["persistent_workers"] = True
+        options["prefetch_factor"] = max(1, int(getattr(args, "loader_prefetch_factor", 2)))
+    return options
+
+
 @torch.no_grad()
 def evaluate_loader(
     model: torch.nn.Module,
@@ -700,6 +718,8 @@ def train(args: argparse.Namespace) -> Path:
         )
 
     target_mean_np, target_std_np = target_stats(dataset, train_indices)
+    device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    loader_kwargs = dataloader_options(args, device)
 
     collate = partial(collate_batch, max_notes=args.max_notes)
     train_loader = DataLoader(
@@ -707,21 +727,23 @@ def train(args: argparse.Namespace) -> Path:
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=collate,
+        **loader_kwargs,
     )
     val_loader = DataLoader(
         Subset(dataset, val_indices),
         batch_size=args.batch_size,
         shuffle=False,
         collate_fn=collate,
+        **loader_kwargs,
     )
     test_loader = DataLoader(
         Subset(dataset, test_indices),
         batch_size=args.batch_size,
         shuffle=False,
         collate_fn=collate,
+        **loader_kwargs,
     )
 
-    device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     model = create_model(args.model, output_dim=len(target_columns), config=model_config_from_args(args)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
@@ -884,6 +906,24 @@ def parse_args() -> argparse.Namespace:
         help="For tabular_forest, also write K-fold out-of-fold metrics when set to 2 or higher.",
     )
     parser.add_argument("--workers", type=int, default=-1)
+    parser.add_argument(
+        "--loader-workers",
+        type=int,
+        default=0,
+        help="PyTorch DataLoader workers for summary/lstm. Keep 0 on Windows; use 2+ in Colab.",
+    )
+    parser.add_argument(
+        "--pin-memory",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="Pin DataLoader memory for GPU transfer. auto enables it on CUDA.",
+    )
+    parser.add_argument(
+        "--loader-prefetch-factor",
+        type=int,
+        default=2,
+        help="DataLoader prefetch factor when --loader-workers is greater than 0.",
+    )
     parser.add_argument("--lstm-embed-dim", type=int, default=64)
     parser.add_argument("--lstm-hidden-dim", type=int, default=128)
     parser.add_argument("--lstm-layers", type=int, default=2)

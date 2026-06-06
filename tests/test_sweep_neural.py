@@ -1,6 +1,8 @@
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
-from mania_difficulty.tools.sweep_neural import choose_best_candidate, neural_grid
+from mania_difficulty.tools.sweep_neural import candidate_train_args, choose_best_candidate, neural_grid
 
 
 class SweepNeuralTests(unittest.TestCase):
@@ -55,6 +57,47 @@ class SweepNeuralTests(unittest.TestCase):
         best = choose_best_candidate(rows, selection_metric="mean_pairwise_order_accuracy")
 
         self.assertEqual(best["candidate_id"], "better_order")
+
+    def test_candidate_train_args_passes_loader_options(self):
+        base_args = SimpleNamespace(
+            labels=Path("labels.csv"),
+            sequences=Path("sequences"),
+            run_prefix="sweep",
+            targets="mean_acc,acc_std,skill_gap",
+            epochs=2,
+            patience=1,
+            max_notes=800,
+            group_column="beatmapset_id",
+            seed=42,
+            device="cuda",
+            loss_weights=[1.0, 0.5, 0.5],
+            workers=0,
+            loader_workers=2,
+            pin_memory="auto",
+            loader_prefetch_factor=3,
+            lstm_embed_dims=[32],
+            lstm_hidden_dims=[64],
+            lstm_layers=[1],
+            lstm_dropouts=[0.1],
+            lstm_head_dropouts=[0.2],
+            summary_hidden_dims=[96],
+            summary_dropouts=[0.1],
+        )
+        candidate = {
+            "candidate_id": "summary",
+            "model": "summary",
+            "summary_hidden_dim": 96,
+            "summary_dropout": 0.1,
+            "lr": 0.001,
+            "weight_decay": 0.0001,
+            "batch_size": 16,
+        }
+
+        train_args = candidate_train_args(base_args, candidate)
+
+        self.assertEqual(train_args.loader_workers, 2)
+        self.assertEqual(train_args.pin_memory, "auto")
+        self.assertEqual(train_args.loader_prefetch_factor, 3)
 
 
 if __name__ == "__main__":

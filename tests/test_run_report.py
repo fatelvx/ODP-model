@@ -31,7 +31,14 @@ class RunReportTests(unittest.TestCase):
                 json.dumps(
                     {
                         "mean_acc": {"mae": 0.1, "r2": 0.2, "spearman": 0.3, "pairwise_order_accuracy": 0.4},
-                        "_run": {"model_name": "summary", "amp": "auto", "amp_enabled": False},
+                        "_run": {
+                            "model_name": "summary",
+                            "amp": "auto",
+                            "amp_enabled": False,
+                            "batch_size": 8,
+                            "grad_accum_steps": 2,
+                            "effective_batch_size": 16,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -49,6 +56,9 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("attention_report.html", report)
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
+        self.assertIn("Grad Accum Steps", report)
+        self.assertIn("Effective Batch Size", report)
+        self.assertIn("16", report)
 
 
 if __name__ == "__main__":

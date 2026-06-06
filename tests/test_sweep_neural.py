@@ -82,6 +82,7 @@ class SweepNeuralTests(unittest.TestCase):
             pin_memory="auto",
             loader_prefetch_factor=3,
             amp="auto",
+            grad_accum_steps=2,
             lstm_embed_dims=[32],
             lstm_hidden_dims=[64],
             lstm_layers=[1],
@@ -112,6 +113,7 @@ class SweepNeuralTests(unittest.TestCase):
         self.assertEqual(train_args.pin_memory, "auto")
         self.assertEqual(train_args.loader_prefetch_factor, 3)
         self.assertEqual(train_args.amp, "auto")
+        self.assertEqual(train_args.grad_accum_steps, 2)
 
     def test_candidate_train_args_passes_transformer_options(self):
         base_args = SimpleNamespace(
@@ -131,6 +133,7 @@ class SweepNeuralTests(unittest.TestCase):
             pin_memory="auto",
             loader_prefetch_factor=3,
             amp="auto",
+            grad_accum_steps=2,
             lstm_embed_dims=[32],
             lstm_hidden_dims=[64],
             lstm_layers=[1],

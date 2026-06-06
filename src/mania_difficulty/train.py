@@ -160,6 +160,20 @@ def parse_max_features(value: str) -> str | float:
     return parsed
 
 
+def positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Expected a positive integer.") from error
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("Expected a positive integer.")
+    return parsed
+
+
+def gradient_accumulation_steps(args: argparse.Namespace) -> int:
+    return max(1, int(getattr(args, "grad_accum_steps", 1)))
+
+
 def model_config_from_args(args: argparse.Namespace) -> dict[str, object]:
     if args.model == "lstm":
         return {
@@ -779,6 +793,8 @@ def train(args: argparse.Namespace) -> Path:
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     loader_kwargs = dataloader_options(args, device)
     amp_active = mixed_precision_enabled(args, device)
+    grad_accum_steps = gradient_accumulation_steps(args)
+    effective_batch_size = args.batch_size * grad_accum_steps
 
     collate = partial(collate_batch, max_notes=args.max_notes)
     train_loader = DataLoader(
@@ -824,21 +840,27 @@ def train(args: argparse.Namespace) -> Path:
     for epoch in range(1, args.epochs + 1):
         model.train()
         train_losses = []
-        for batch in train_loader:
+        optimizer.zero_grad(set_to_none=True)
+        train_batch_count = len(train_loader)
+        for batch_index, batch in enumerate(train_loader, start=1):
             features = batch.features.to(device)
             lengths = batch.lengths.to(device)
             targets = batch.targets.to(device)
             normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
 
-            optimizer.zero_grad(set_to_none=True)
             with autocast_context(device, amp_active):
                 pred = model(features, lengths)
                 loss = weighted_huber_loss(pred, normalized_targets, loss_weights)
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update()
+            group_start = ((batch_index - 1) // grad_accum_steps) * grad_accum_steps + 1
+            accumulation_divisor = min(grad_accum_steps, train_batch_count - group_start + 1)
+            scaler.scale(loss / accumulation_divisor).backward()
+            should_step = batch_index % grad_accum_steps == 0 or batch_index == len(train_loader)
+            if should_step:
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
             train_losses.append(float(loss.item()))
 
         scheduler.step()
@@ -914,6 +936,9 @@ def train(args: argparse.Namespace) -> Path:
         "test_loss": test_loss,
         "amp": getattr(args, "amp", "auto"),
         "amp_enabled": amp_active,
+        "batch_size": args.batch_size,
+        "grad_accum_steps": grad_accum_steps,
+        "effective_batch_size": effective_batch_size,
         "train_size": len(train_indices),
         "val_size": len(val_indices),
         "test_size": len(test_indices),
@@ -938,6 +963,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--targets", default=",".join(DEFAULT_TARGET_COLUMNS))
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument(
+        "--grad-accum-steps",
+        type=positive_int,
+        default=1,
+        help="Accumulate gradients across N micro-batches before stepping. Effective batch size is batch-size * N.",
+    )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=10)

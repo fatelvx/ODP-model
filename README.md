@@ -281,6 +281,7 @@ python -m mania_difficulty.tools.sweep_neural `
   --epochs 30 `
   --patience 6 `
   --batch-size 32 `
+  --grad-accum-steps 1 `
   --lrs 0.001,0.0005 `
   --weight-decays 0.0001 `
   --lstm-embed-dims 32,64 `
@@ -305,7 +306,9 @@ The neural sweep writes `neural_sweep_summary.csv`,
 prediction error, or `--selection-metric mean_pairwise_order_accuracy` when the
 priority is choosing the same harder/easier direction a human would compare.
 On Colab or another Linux GPU runtime, use `--loader-workers 2` to keep the GPU
-fed. `--amp auto` enables mixed precision on CUDA and stays off on CPU. On local
+fed. `--amp auto` enables mixed precision on CUDA and stays off on CPU. If a GPU
+run is out of memory, lower `--batch-size` and raise `--grad-accum-steps 2` or
+`4`; the effective batch size is `batch-size * grad-accum-steps`. On local
 Windows CPU pilots, leave loader workers at the default `0`.
 
 Compare runs:
@@ -389,7 +392,8 @@ The notebook includes a synthetic smoke path and a real-data path. For real
 data, keep API credentials in the notebook session only; do not commit them.
 The real-data path keeps LSTM as the normal Colab default, but if the neural
 sweep is changed to include `transformer`, the final run and dashboard use
-`colab_{model}_top100` automatically.
+`colab_{model}_top100` automatically. If Colab reports CUDA out-of-memory,
+change `GRAD_ACCUM_STEPS` in the notebook from `1` to `2` or `4`.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.

@@ -1,9 +1,15 @@
+import argparse
 import unittest
 from types import SimpleNamespace
 
 import torch
 
-from mania_difficulty.train import dataloader_options, mixed_precision_enabled
+from mania_difficulty.train import (
+    dataloader_options,
+    gradient_accumulation_steps,
+    mixed_precision_enabled,
+    positive_int,
+)
 
 
 class LoaderOptionTests(unittest.TestCase):
@@ -43,6 +49,25 @@ class LoaderOptionTests(unittest.TestCase):
         args = SimpleNamespace(amp="off")
 
         self.assertFalse(mixed_precision_enabled(args, torch.device("cuda")))
+
+    def test_gradient_accumulation_defaults_to_one(self):
+        args = SimpleNamespace()
+
+        self.assertEqual(gradient_accumulation_steps(args), 1)
+
+    def test_gradient_accumulation_uses_positive_step_count(self):
+        args = SimpleNamespace(grad_accum_steps=4)
+
+        self.assertEqual(gradient_accumulation_steps(args), 4)
+
+    def test_positive_int_rejects_zero_and_negative_values(self):
+        self.assertEqual(positive_int("3"), 3)
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            positive_int("0")
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            positive_int("-1")
 
 
 if __name__ == "__main__":

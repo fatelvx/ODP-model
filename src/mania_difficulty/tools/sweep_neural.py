@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
-from mania_difficulty.train import train
+from mania_difficulty.train import positive_int, train
 from mania_difficulty.tools.sweep_selection import (
     parse_selection_metric,
     selection_sort_ascending,
@@ -218,6 +218,7 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         pin_memory=base_args.pin_memory,
         loader_prefetch_factor=base_args.loader_prefetch_factor,
         amp=base_args.amp,
+        grad_accum_steps=getattr(base_args, "grad_accum_steps", 1),
         lstm_embed_dim=int(candidate.get("lstm_embed_dim", base_args.lstm_embed_dims[0])),
         lstm_hidden_dim=int(candidate.get("lstm_hidden_dim", base_args.lstm_hidden_dims[0])),
         lstm_layers=int(candidate.get("lstm_layers", base_args.lstm_layers[0])),
@@ -300,6 +301,8 @@ def summarize_run(
         "train_size": run_info.get("train_size"),
         "val_size": run_info.get("val_size"),
         "test_size": run_info.get("test_size"),
+        "grad_accum_steps": run_info.get("grad_accum_steps"),
+        "effective_batch_size": run_info.get("effective_batch_size"),
         "model_config": json.dumps(run_info.get("model_config", {}), ensure_ascii=False),
     }
     return summary, rows
@@ -374,6 +377,12 @@ def main() -> None:
     parser.add_argument("--pin-memory", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--loader-prefetch-factor", type=int, default=2)
     parser.add_argument("--amp", choices=["auto", "on", "off"], default="auto")
+    parser.add_argument(
+        "--grad-accum-steps",
+        type=positive_int,
+        default=1,
+        help="Accumulate gradients across N micro-batches for every candidate.",
+    )
     parser.add_argument("--summary-hidden-dims", type=parse_int_list, default=[96, 128, 192])
     parser.add_argument("--summary-dropouts", type=parse_float_list, default=[0.1, 0.2, 0.35])
     parser.add_argument("--lstm-embed-dims", type=parse_int_list, default=[32, 64])

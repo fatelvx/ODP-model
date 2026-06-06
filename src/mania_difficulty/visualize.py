@@ -321,6 +321,8 @@ def write_run_report(
                 f"<tr><th>Resume</th><td>{html.escape(str(run_info.get('resume', '')))}</td></tr>"
                 f"<tr><th>Resumed From Epoch</th><td>{html.escape(str(run_info.get('resumed_from_epoch', '')))}</td></tr>"
                 f"<tr><th>Last Checkpoint</th><td>{html.escape(str(run_info.get('last_checkpoint', '')))}</td></tr>"
+                f"<tr><th>Checkpoint Backup Dir</th><td>{html.escape(str(run_info.get('checkpoint_backup_dir', '')))}</td></tr>"
+                f"<tr><th>Restored From Backup</th><td>{html.escape(str(run_info.get('restored_from_backup', '')))}</td></tr>"
                 f"<tr><th>Split</th><td>{html.escape(str(run_info.get('split_strategy', '')))}</td></tr>"
                 f"<tr><th>Group Column</th><td>{html.escape(str(run_info.get('group_column', '')))}</td></tr>"
                 f"<tr><th>Group Count</th><td>{html.escape(str(run_info.get('group_count', '')))}</td></tr>"

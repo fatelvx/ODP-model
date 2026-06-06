@@ -68,6 +68,8 @@ class RunReportTests(unittest.TestCase):
                             "effective_batch_size": 16,
                             "resume": True,
                             "resumed_from_epoch": 2,
+                            "checkpoint_backup_dir": "drive/checkpoints/run_a",
+                            "restored_from_backup": True,
                         },
                     }
                 ),
@@ -96,6 +98,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Possible", report)
         self.assertIn("Resume", report)
         self.assertIn("Resumed From Epoch", report)
+        self.assertIn("Checkpoint Backup Dir", report)
+        self.assertIn("Restored From Backup", report)
         self.assertIn("Training Performance", report)
         self.assertIn("Average Epoch Seconds", report)
         self.assertIn("Peak CUDA Memory MB", report)

@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import random
+import shutil
 import time
 from contextlib import nullcontext
 from functools import partial
@@ -44,6 +45,18 @@ HISTORY_COLUMNS = [
     "epoch_seconds",
     "lr",
     "cuda_max_memory_mb",
+]
+
+CHECKPOINT_BACKUP_FILENAMES = [
+    "last_checkpoint.pt",
+    "best_model.pt",
+    "history.csv",
+    "metrics.json",
+    "run_report.html",
+    "learning_curve.png",
+    "prediction_scatter.png",
+    "predictions.csv",
+    "config.json",
 ]
 
 
@@ -187,6 +200,39 @@ def gradient_accumulation_steps(args: argparse.Namespace) -> int:
 
 def latest_checkpoint_path(run_dir: Path | str) -> Path:
     return Path(run_dir) / "last_checkpoint.pt"
+
+
+def checkpoint_backup_run_dir(base_dir: Path | str, run_name: str) -> Path:
+    safe_run_name = str(run_name).replace("\\", "_").replace("/", "_")
+    return Path(base_dir) / safe_run_name
+
+
+def sync_checkpoint_backup(run_dir: Path, backup_dir: Path) -> list[Path]:
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    copied: list[Path] = []
+    for filename in CHECKPOINT_BACKUP_FILENAMES:
+        source = run_dir / filename
+        if not source.exists():
+            continue
+        destination = backup_dir / filename
+        shutil.copy2(source, destination)
+        copied.append(destination)
+    return copied
+
+
+def restore_checkpoint_backup(run_dir: Path, backup_dir: Path) -> list[Path]:
+    if not backup_dir.exists():
+        return []
+    run_dir.mkdir(parents=True, exist_ok=True)
+    restored: list[Path] = []
+    for filename in CHECKPOINT_BACKUP_FILENAMES:
+        source = backup_dir / filename
+        destination = run_dir / filename
+        if not source.exists() or destination.exists():
+            continue
+        shutil.copy2(source, destination)
+        restored.append(destination)
+    return restored
 
 
 def model_config_from_args(args: argparse.Namespace) -> dict[str, object]:
@@ -888,9 +934,22 @@ def train(args: argparse.Namespace) -> Path:
     patience_left = args.patience
     checkpoint_path = run_dir / "best_model.pt"
     last_checkpoint_path = latest_checkpoint_path(run_dir)
+    backup_base_dir = getattr(args, "checkpoint_backup_dir", None)
+    backup_run_dir = (
+        checkpoint_backup_run_dir(backup_base_dir, args.run_name)
+        if backup_base_dir
+        else None
+    )
     resume_requested = bool(getattr(args, "resume", False))
     resumed_from_epoch = 0
+    restored_from_backup = False
     start_epoch = 1
+
+    if resume_requested and backup_run_dir and not last_checkpoint_path.exists():
+        restored_paths = restore_checkpoint_backup(run_dir, backup_run_dir)
+        restored_from_backup = bool(restored_paths)
+        if restored_paths:
+            print(f"Restored {len(restored_paths)} checkpoint files from {backup_run_dir}.")
 
     if resume_requested and last_checkpoint_path.exists():
         resume_checkpoint = torch.load(last_checkpoint_path, map_location=device)
@@ -1018,6 +1077,10 @@ def train(args: argparse.Namespace) -> Path:
             },
             last_checkpoint_path,
         )
+        if backup_run_dir:
+            copied_paths = sync_checkpoint_backup(run_dir, backup_run_dir)
+            if copied_paths:
+                print(f"Backed up {len(copied_paths)} checkpoint files to {backup_run_dir}.")
         if patience_left <= 0:
             print(f"Early stopping at epoch {epoch}; best epoch was {best_epoch}.")
             break
@@ -1063,6 +1126,8 @@ def train(args: argparse.Namespace) -> Path:
         "resume": resume_requested,
         "resumed_from_epoch": resumed_from_epoch,
         "last_checkpoint": last_checkpoint_path.name if last_checkpoint_path.exists() else "",
+        "checkpoint_backup_dir": str(backup_run_dir) if backup_run_dir else "",
+        "restored_from_backup": restored_from_backup,
         "train_size": len(train_indices),
         "val_size": len(val_indices),
         "test_size": len(test_indices),
@@ -1075,6 +1140,10 @@ def train(args: argparse.Namespace) -> Path:
     write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
 
     (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2, default=str), encoding="utf-8")
+    if backup_run_dir:
+        copied_paths = sync_checkpoint_backup(run_dir, backup_run_dir)
+        if copied_paths:
+            print(f"Backed up {len(copied_paths)} final run files to {backup_run_dir}.")
     print(f"Run artifacts written to {run_dir}")
     return run_dir
 
@@ -1097,6 +1166,12 @@ def parse_args() -> argparse.Namespace:
         "--resume",
         action="store_true",
         help="For neural models, resume from last_checkpoint.pt in the run directory when it exists.",
+    )
+    parser.add_argument(
+        "--checkpoint-backup-dir",
+        type=Path,
+        default=None,
+        help="Optional base directory for backing up neural checkpoints by run name, useful for Google Drive in Colab.",
     )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)

@@ -219,6 +219,7 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         loader_prefetch_factor=base_args.loader_prefetch_factor,
         amp=base_args.amp,
         grad_accum_steps=getattr(base_args, "grad_accum_steps", 1),
+        checkpoint_backup_dir=getattr(base_args, "checkpoint_backup_dir", None),
         lstm_embed_dim=int(candidate.get("lstm_embed_dim", base_args.lstm_embed_dims[0])),
         lstm_hidden_dim=int(candidate.get("lstm_hidden_dim", base_args.lstm_hidden_dims[0])),
         lstm_layers=int(candidate.get("lstm_layers", base_args.lstm_layers[0])),
@@ -382,6 +383,12 @@ def main() -> None:
         type=positive_int,
         default=1,
         help="Accumulate gradients across N micro-batches for every candidate.",
+    )
+    parser.add_argument(
+        "--checkpoint-backup-dir",
+        type=Path,
+        default=None,
+        help="Optional base directory for backing up each candidate's neural checkpoints.",
     )
     parser.add_argument("--summary-hidden-dims", type=parse_int_list, default=[96, 128, 192])
     parser.add_argument("--summary-dropouts", type=parse_float_list, default=[0.1, 0.2, 0.35])

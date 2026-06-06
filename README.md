@@ -397,7 +397,10 @@ sweep is changed to include `transformer`, the final run and dashboard use
 `colab_{model}_top100` automatically. If Colab reports CUDA out-of-memory,
 change `GRAD_ACCUM_STEPS` in the notebook from `1` to `2` or `4`. If a long
 final neural run is interrupted, re-run the final training cell with
-`RESUME_FINAL_TRAINING = True` to continue from `last_checkpoint.pt`.
+`RESUME_FINAL_TRAINING = True` to continue from `last_checkpoint.pt`. To survive
+a full Colab runtime reset, set `USE_DRIVE_CHECKPOINT_BACKUP = True`; the final
+training command will use `--checkpoint-backup-dir` to sync checkpoints to
+Google Drive and restore them before resume.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.

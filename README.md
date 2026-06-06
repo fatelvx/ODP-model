@@ -223,6 +223,35 @@ python -m mania_difficulty.train `
   --lstm-head-dropout 0.3
 ```
 
+Tune summary/LSTM neural parameters with a holdout sweep:
+
+```powershell
+python -m mania_difficulty.tools.sweep_neural `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --out-dir outputs/neural_sweep_top100 `
+  --run-prefix neural_sweep_top100 `
+  --models lstm `
+  --epochs 30 `
+  --patience 6 `
+  --batch-size 32 `
+  --lrs 0.001,0.0005 `
+  --weight-decays 0.0001 `
+  --lstm-embed-dims 32,64 `
+  --lstm-hidden-dims 64,128 `
+  --lstm-layers 1,2 `
+  --lstm-dropouts 0.1,0.2 `
+  --lstm-head-dropouts 0.2 `
+  --max-candidates 4 `
+  --device cuda
+```
+
+The neural sweep writes `neural_sweep_summary.csv`,
+`neural_sweep_details.csv`, `best_params.json`, and
+`neural_sweep_report.html`. It selects by holdout mean MAE, so use it for quick
+architecture direction, then confirm promising runs with more data and human
+review.
+
 Compare runs:
 
 ```powershell

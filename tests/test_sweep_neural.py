@@ -17,6 +17,7 @@ class SweepNeuralTests(unittest.TestCase):
             lrs=[0.001],
             weight_decays=[0.0001],
             batch_sizes=[16],
+            huber_deltas=[1.0],
             summary_hidden_dims=[64, 96],
             summary_dropouts=[0.1],
             lstm_embed_dims=[16],
@@ -37,6 +38,25 @@ class SweepNeuralTests(unittest.TestCase):
         self.assertEqual(candidates[0]["summary_hidden_dim"], 64)
         self.assertEqual(candidates[-1]["model"], "transformer")
         self.assertEqual(candidates[-1]["transformer_embed_dim"], 32)
+
+    def test_neural_grid_expands_huber_delta_candidates(self):
+        candidates = neural_grid(
+            models=["summary"],
+            lrs=[0.001],
+            weight_decays=[0.0001],
+            batch_sizes=[16],
+            huber_deltas=[0.5, 1.0],
+            summary_hidden_dims=[64],
+            summary_dropouts=[0.1],
+            lstm_embed_dims=[16],
+            lstm_hidden_dims=[32],
+            lstm_layers=[1],
+            lstm_dropouts=[0.0],
+            lstm_head_dropouts=[0.2],
+        )
+
+        self.assertEqual([candidate["huber_delta"] for candidate in candidates], [0.5, 1.0])
+        self.assertIn("hd0p5", candidates[0]["candidate_id"])
 
     def test_choose_best_candidate_prefers_lowest_mean_mae_then_smaller_model(self):
         rows = [
@@ -105,6 +125,7 @@ class SweepNeuralTests(unittest.TestCase):
             seed=42,
             device="cuda",
             loss_weights=[1.0, 0.5, 0.5],
+            huber_delta=0.5,
             sample_weight_column="score_count",
             sample_weight_min=0.25,
             sample_weight_max_value=100.0,
@@ -151,6 +172,7 @@ class SweepNeuralTests(unittest.TestCase):
         self.assertEqual(train_args.grad_clip_norm, 0.75)
         self.assertEqual(train_args.checkpoint_metric, "val_mean_mae")
         self.assertEqual(train_args.checkpoint_backup_dir, Path("drive/checkpoints"))
+        self.assertEqual(train_args.huber_delta, 0.5)
         self.assertEqual(train_args.sample_weight_column, "score_count")
         self.assertEqual(train_args.sample_weight_min, 0.25)
         self.assertEqual(train_args.sample_weight_max_value, 100.0)

@@ -115,6 +115,8 @@ class BuildDashboardTests(unittest.TestCase):
                             "git_branch": "main",
                             "git_dirty": False,
                             "git_status_entries": 0,
+                            "loss": "huber",
+                            "huber_delta": 0.5,
                             "amp_enabled": True,
                             "effective_batch_size": 64,
                             "grad_clip_norm": 0.75,
@@ -203,6 +205,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("git_branch", decision_summary)
         self.assertIn("git_dirty", decision_summary)
         self.assertIn("git_status_entries", decision_summary)
+        self.assertIn("loss", decision_summary)
+        self.assertIn("huber", decision_summary)
+        self.assertIn("huber_delta", decision_summary)
         self.assertIn("amp_enabled", decision_summary)
         self.assertIn("effective_batch_size", decision_summary)
         self.assertIn("grad_clip_norm", decision_summary)

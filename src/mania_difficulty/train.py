@@ -308,8 +308,10 @@ def weighted_huber_loss(
     target: torch.Tensor,
     weights: torch.Tensor,
     sample_weights: torch.Tensor | None = None,
+    *,
+    delta: float = 1.0,
 ) -> torch.Tensor:
-    loss = nn.functional.huber_loss(pred, target, reduction="none", delta=1.0)
+    loss = nn.functional.huber_loss(pred, target, reduction="none", delta=delta)
     weighted = loss * weights
     if sample_weights is not None:
         sample_weights = sample_weights.to(device=weighted.device, dtype=weighted.dtype).view(-1, 1)
@@ -437,6 +439,7 @@ def evaluate_loader(
     target_mean_np: np.ndarray,
     target_std_np: np.ndarray,
     amp_enabled: bool = False,
+    huber_delta: float = 1.0,
 ) -> tuple[float, np.ndarray, np.ndarray, list[int]]:
     model.eval()
     losses = []
@@ -452,7 +455,12 @@ def evaluate_loader(
         normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
         with autocast_context(device, amp_enabled):
             normalized_pred = model(features, lengths)
-            loss = weighted_huber_loss(normalized_pred, normalized_targets, weights)
+            loss = weighted_huber_loss(
+                normalized_pred,
+                normalized_targets,
+                weights,
+                delta=huber_delta,
+            )
         losses.append(float(loss.item()))
 
         pred = inverse_transform(normalized_pred.cpu().numpy(), target_mean_np, target_std_np)
@@ -1318,6 +1326,7 @@ def train(args: argparse.Namespace) -> Path:
     loss_weights = torch.tensor(args.loss_weights, dtype=torch.float32, device=device)
     if loss_weights.numel() != len(target_columns):
         loss_weights = torch.ones(len(target_columns), dtype=torch.float32, device=device)
+    huber_delta = float(getattr(args, "huber_delta", 1.0))
 
     history_csv = run_dir / "history.csv"
     checkpoint_metric = getattr(args, "checkpoint_metric", "val_loss")
@@ -1417,6 +1426,7 @@ def train(args: argparse.Namespace) -> Path:
                     normalized_targets,
                     loss_weights,
                     sample_weights if getattr(args, "sample_weight_column", "") else None,
+                    delta=huber_delta,
                 )
             group_start = ((batch_index - 1) // grad_accum_steps) * grad_accum_steps + 1
             accumulation_divisor = min(grad_accum_steps, train_batch_count - group_start + 1)
@@ -1442,6 +1452,7 @@ def train(args: argparse.Namespace) -> Path:
             target_mean_np,
             target_std_np,
             amp_active,
+            huber_delta,
         )
         val_history_metrics = validation_history_metrics(val_actual, val_pred, target_columns)
         current_checkpoint_score = checkpoint_metric_score(
@@ -1494,6 +1505,8 @@ def train(args: argparse.Namespace) -> Path:
                     "target_std": target_std_np.tolist(),
                     "max_notes": args.max_notes,
                     "grad_clip_norm": "" if grad_clip is None else grad_clip,
+                    "loss": "huber",
+                    "huber_delta": huber_delta,
                     "best_epoch": best_epoch,
                     "checkpoint_metric": checkpoint_metric,
                     "best_checkpoint_score": best_checkpoint_score,
@@ -1517,6 +1530,8 @@ def train(args: argparse.Namespace) -> Path:
                 "target_std": target_std_np.tolist(),
                 "max_notes": args.max_notes,
                 "grad_clip_norm": "" if grad_clip is None else grad_clip,
+                "loss": "huber",
+                "huber_delta": huber_delta,
                 "best_epoch": best_epoch,
                 "best_val_loss": best_val_loss,
                 "checkpoint_metric": checkpoint_metric,
@@ -1545,6 +1560,7 @@ def train(args: argparse.Namespace) -> Path:
         target_mean_np,
         target_std_np,
         amp_active,
+        huber_delta,
     )
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
@@ -1597,6 +1613,8 @@ def train(args: argparse.Namespace) -> Path:
         "checkpoint_metric": checkpoint_metric,
         "best_checkpoint_score": best_checkpoint_score,
         "test_loss": test_loss,
+        "loss": "huber",
+        "huber_delta": huber_delta,
         "epochs_requested": args.epochs,
         "epochs_completed": epochs_completed,
         "stop_reason": stop_reason,
@@ -1698,6 +1716,15 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         default=[1.0, 0.5, 0.5],
         help="Weights matching --targets. Falls back to all ones if the count differs.",
+    )
+    parser.add_argument(
+        "--huber-delta",
+        type=positive_float,
+        default=1.0,
+        help=(
+            "Huber loss delta on normalized neural targets. Lower values are more robust "
+            "to noisy top100 outliers; 1.0 preserves the current default."
+        ),
     )
     parser.add_argument(
         "--sample-weight-column",

@@ -263,6 +263,10 @@ priority is ranking map pairs in the same harder/easier direction.
 Neural runs clip gradient norm at `--grad-clip-norm 1.0` by default to reduce
 unstable updates on small/noisy top100 labels; set it to `0` to disable clipping
 or lower it if training spikes.
+Neural runs use Huber loss on normalized targets. Set `--huber-delta 0.5` to
+make the loss more robust to noisy top100 outliers, or keep `1.0` for the
+current default. Run reports and dashboard decision summaries show the selected
+loss and delta.
 Each run records the current git commit, branch, and dirty state in
 `metrics.json`, `run_report.html`, and dashboard decision summaries so Colab
 artifacts can be traced back to the code version that produced them.
@@ -328,6 +332,7 @@ python -m mania_difficulty.tools.sweep_neural `
   --batch-size 32 `
   --grad-accum-steps 1 `
   --grad-clip-norm 1.0 `
+  --huber-deltas 0.5,1.0 `
   --checkpoint-metric val_mean_mae `
   --sample-weight-column score_count `
   --sample-weight-min 0.25 `
@@ -355,6 +360,8 @@ The neural sweep writes `neural_sweep_summary.csv`,
 `neural_sweep_report.html`. Use `--selection-metric mean_mae` for absolute
 prediction error, or `--selection-metric mean_pairwise_order_accuracy` when the
 priority is choosing the same harder/easier direction a human would compare.
+Include `--huber-deltas 0.5,1.0` when top100 labels look noisy so the sweep can
+choose the more robust loss setting instead of only changing architecture.
 On Colab or another Linux GPU runtime, use `--loader-workers 2` to keep the GPU
 fed. `--amp auto` enables mixed precision on CUDA and stays off on CPU. If a GPU
 run is out of memory, lower `--batch-size` and raise `--grad-accum-steps 2` or
@@ -411,10 +418,10 @@ python -m mania_difficulty.tools.build_dashboard `
 Start with the dashboard's `Run Decision Summary` table when comparing runs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
 the generated `Next Action`; it also keeps device, AMP, effective batch size,
-gradient clip norm, epochs completed, and stop reason visible so Colab GPU runs
-are easier to compare. It also includes learning-curve health such as best/final
-validation MAE, best/final pairwise order, overfit signal, average epoch seconds,
-and peak CUDA memory. It also reads `prediction_summary.csv` and
+gradient clip norm, Huber delta, epochs completed, and stop reason visible so
+Colab GPU runs are easier to compare. It also includes learning-curve health
+such as best/final validation MAE, best/final pairwise order, overfit signal,
+average epoch seconds, and peak CUDA memory. It also reads `prediction_summary.csv` and
 `cv_prediction_summary.csv` into calibration fields such as mean absolute bias,
 worst biased target, worst p90 absolute error, and predicted-vs-actual spread
 ratio; low spread ratio is a warning that the model may be collapsing toward

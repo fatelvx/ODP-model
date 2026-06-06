@@ -106,6 +106,17 @@ class TrainingHistoryTests(unittest.TestCase):
         self.assertLess(float(weighted), float(unweighted))
         self.assertAlmostEqual(float(weighted), 0.9, places=6)
 
+    def test_weighted_huber_loss_uses_configured_delta(self):
+        pred = torch.tensor([[2.0]])
+        target = torch.zeros_like(pred)
+        target_weights = torch.ones(1)
+
+        default_delta = weighted_huber_loss(pred, target, target_weights, delta=1.0)
+        smaller_delta = weighted_huber_loss(pred, target, target_weights, delta=0.5)
+
+        self.assertLess(float(smaller_delta), float(default_delta))
+        self.assertAlmostEqual(float(smaller_delta), 0.875, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

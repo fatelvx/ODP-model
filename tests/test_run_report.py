@@ -149,6 +149,8 @@ class RunReportTests(unittest.TestCase):
                             "git_branch": "main",
                             "git_dirty": False,
                             "git_status_entries": 0,
+                            "loss": "huber",
+                            "huber_delta": 0.5,
                             "amp": "auto",
                             "amp_enabled": False,
                             "batch_size": 8,
@@ -213,6 +215,10 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Git Branch", report)
         self.assertIn("main", report)
         self.assertIn("Git Dirty", report)
+        self.assertIn("Loss", report)
+        self.assertIn("huber", report)
+        self.assertIn("Huber Delta", report)
+        self.assertIn("0.5", report)
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
         self.assertIn("Grad Accum Steps", report)

@@ -78,6 +78,7 @@ def neural_grid(
     lrs: list[float],
     weight_decays: list[float],
     batch_sizes: list[int],
+    huber_deltas: list[float],
     summary_hidden_dims: list[int],
     summary_dropouts: list[float],
     lstm_embed_dims: list[int],
@@ -93,7 +94,7 @@ def neural_grid(
     transformer_head_dropouts: list[float] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    shared_options = list(product(lrs, weight_decays, batch_sizes))
+    shared_options = list(product(lrs, weight_decays, batch_sizes, huber_deltas))
     transformer_embed_dims = transformer_embed_dims or [64]
     transformer_heads = transformer_heads or [4]
     transformer_layers = transformer_layers or [2]
@@ -102,12 +103,13 @@ def neural_grid(
     transformer_head_dropouts = transformer_head_dropouts or [0.2]
     for model_name in models:
         if model_name == "summary":
-            for lr, weight_decay, batch_size in shared_options:
+            for lr, weight_decay, batch_size, huber_delta in shared_options:
                 for hidden_dim, dropout in product(summary_hidden_dims, summary_dropouts):
                     candidate = {
                         "candidate_id": (
                             f"summary_h{hidden_dim}_do{value_token(dropout)}_"
-                            f"lr{value_token(lr)}_wd{value_token(weight_decay)}_bs{batch_size}"
+                            f"lr{value_token(lr)}_wd{value_token(weight_decay)}_"
+                            f"bs{batch_size}_hd{value_token(huber_delta)}"
                         ),
                         "model": "summary",
                         "summary_hidden_dim": hidden_dim,
@@ -115,11 +117,12 @@ def neural_grid(
                         "lr": lr,
                         "weight_decay": weight_decay,
                         "batch_size": batch_size,
+                        "huber_delta": huber_delta,
                     }
                     candidate["model_size_score"] = model_size_score(candidate)
                     candidates.append(candidate)
         elif model_name == "lstm":
-            for lr, weight_decay, batch_size in shared_options:
+            for lr, weight_decay, batch_size, huber_delta in shared_options:
                 for embed_dim, hidden_dim, layers, dropout, head_dropout in product(
                     lstm_embed_dims,
                     lstm_hidden_dims,
@@ -131,7 +134,8 @@ def neural_grid(
                         "candidate_id": (
                             f"lstm_e{embed_dim}_h{hidden_dim}_l{layers}_do{value_token(dropout)}_"
                             f"head{value_token(head_dropout)}_lr{value_token(lr)}_"
-                            f"wd{value_token(weight_decay)}_bs{batch_size}"
+                            f"wd{value_token(weight_decay)}_bs{batch_size}_"
+                            f"hd{value_token(huber_delta)}"
                         ),
                         "model": "lstm",
                         "lstm_embed_dim": embed_dim,
@@ -142,11 +146,12 @@ def neural_grid(
                         "lr": lr,
                         "weight_decay": weight_decay,
                         "batch_size": batch_size,
+                        "huber_delta": huber_delta,
                     }
                     candidate["model_size_score"] = model_size_score(candidate)
                     candidates.append(candidate)
         elif model_name == "transformer":
-            for lr, weight_decay, batch_size in shared_options:
+            for lr, weight_decay, batch_size, huber_delta in shared_options:
                 for embed_dim, heads, layers, ff_dim, dropout, head_dropout in product(
                     transformer_embed_dims,
                     transformer_heads,
@@ -159,7 +164,8 @@ def neural_grid(
                         "candidate_id": (
                             f"transformer_e{embed_dim}_h{heads}_l{layers}_ff{ff_dim}_"
                             f"do{value_token(dropout)}_head{value_token(head_dropout)}_"
-                            f"lr{value_token(lr)}_wd{value_token(weight_decay)}_bs{batch_size}"
+                            f"lr{value_token(lr)}_wd{value_token(weight_decay)}_"
+                            f"bs{batch_size}_hd{value_token(huber_delta)}"
                         ),
                         "model": "transformer",
                         "transformer_embed_dim": embed_dim,
@@ -171,6 +177,7 @@ def neural_grid(
                         "lr": lr,
                         "weight_decay": weight_decay,
                         "batch_size": batch_size,
+                        "huber_delta": huber_delta,
                     }
                     candidate["model_size_score"] = model_size_score(candidate)
                     candidates.append(candidate)
@@ -214,6 +221,7 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         device=base_args.device,
         model=candidate["model"],
         loss_weights=base_args.loss_weights,
+        huber_delta=float(candidate.get("huber_delta", getattr(base_args, "huber_delta", 1.0))),
         sample_weight_column=getattr(base_args, "sample_weight_column", ""),
         sample_weight_min=getattr(base_args, "sample_weight_min", 0.25),
         sample_weight_max_value=getattr(base_args, "sample_weight_max_value", 100.0),
@@ -317,6 +325,7 @@ def summarize_run(
         "test_size": run_info.get("test_size"),
         "grad_accum_steps": run_info.get("grad_accum_steps"),
         "grad_clip_norm": run_info.get("grad_clip_norm"),
+        "huber_delta": run_info.get("huber_delta", candidate.get("huber_delta")),
         "effective_batch_size": run_info.get("effective_batch_size"),
         "model_config": json.dumps(run_info.get("model_config", {}), ensure_ascii=False),
     }
@@ -387,6 +396,7 @@ def main() -> None:
     parser.add_argument("--device", default="")
     parser.add_argument("--models", type=parse_model_list, default=["summary"])
     parser.add_argument("--loss-weights", type=float, nargs="*", default=[1.0, 0.5, 0.5])
+    parser.add_argument("--huber-deltas", type=parse_float_list, default=[1.0])
     parser.add_argument("--sample-weight-column", default="")
     parser.add_argument("--sample-weight-min", type=sample_weight_min_float, default=0.25)
     parser.add_argument("--sample-weight-max-value", type=positive_float, default=100.0)
@@ -446,6 +456,7 @@ def main() -> None:
         lrs=args.lrs,
         weight_decays=args.weight_decays,
         batch_sizes=args.batch_sizes,
+        huber_deltas=args.huber_deltas,
         summary_hidden_dims=args.summary_hidden_dims,
         summary_dropouts=args.summary_dropouts,
         lstm_embed_dims=args.lstm_embed_dims,

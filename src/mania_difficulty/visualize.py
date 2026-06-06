@@ -779,6 +779,8 @@ def write_run_report(
                 f"<tr><th>Git Branch</th><td>{html.escape(str(run_info.get('git_branch', '')))}</td></tr>"
                 f"<tr><th>Git Dirty</th><td>{html.escape(str(run_info.get('git_dirty', '')))}</td></tr>"
                 f"<tr><th>Git Status Entries</th><td>{html.escape(str(run_info.get('git_status_entries', '')))}</td></tr>"
+                f"<tr><th>Loss</th><td>{html.escape(str(run_info.get('loss', '')))}</td></tr>"
+                f"<tr><th>Huber Delta</th><td>{html.escape(str(run_info.get('huber_delta', '')))}</td></tr>"
                 f"<tr><th>AMP</th><td>{html.escape(str(run_info.get('amp', '')))}</td></tr>"
                 f"<tr><th>AMP Enabled</th><td>{html.escape(str(run_info.get('amp_enabled', '')))}</td></tr>"
                 f"<tr><th>Batch Size</th><td>{html.escape(str(run_info.get('batch_size', '')))}</td></tr>"

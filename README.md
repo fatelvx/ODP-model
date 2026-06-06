@@ -473,7 +473,10 @@ harder/easier ranking agreement instead of absolute validation error.
 When the real-data cells finish, Colab packages the audit, sweeps, run reports,
 plots, dashboard, decision summary, and `outputs/colab_artifact_manifest.json`
 into `colab_top100_outputs.zip`. The manifest lists included paths and missing
-artifacts so downloaded results are easier to verify later.
+artifacts so downloaded results are easier to verify later. The notebook also
+displays the decision summary's calibration columns and each run's
+`prediction_summary.csv` or `cv_prediction_summary.csv`, so bias and
+prediction-spread warnings are visible before downloading the zip.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.

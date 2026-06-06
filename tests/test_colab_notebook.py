@@ -17,6 +17,10 @@ class ColabNotebookTests(unittest.TestCase):
         self.assertIn("colab_top100_outputs.zip", source)
         self.assertIn("GRAD_CLIP_NORM", source)
         self.assertIn("--grad-clip-norm", source)
+        self.assertIn("calibration_columns", source)
+        self.assertIn("prediction_summary.csv", source)
+        self.assertIn("cv_prediction_summary.csv", source)
+        self.assertIn("calibration_warning", source)
 
 
 if __name__ == "__main__":

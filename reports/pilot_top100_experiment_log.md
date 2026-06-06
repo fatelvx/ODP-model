@@ -90,6 +90,56 @@ Notes:
 - Prediction spread is too compressed, so the model is mostly learning the
   center of the label distribution.
 
+### Summary CPU Max-Notes Check
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_summary_cpu_real_m7000 `
+  --model summary `
+  --epochs 12 `
+  --patience 4 `
+  --batch-size 8 `
+  --grad-accum-steps 2 `
+  --checkpoint-metric val_mean_mae `
+  --max-notes 7000 `
+  --group-column beatmapset_id `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --huber-delta 0.5 `
+  --device cpu `
+  --amp off
+```
+
+Validation curve:
+
+| Metric | Start | Final |
+| --- | ---: | ---: |
+| Validation mean MAE | 0.02435 | 0.01616 |
+| Validation pairwise order | 45.96% | 52.02% |
+
+Holdout test metrics:
+
+| Target | MAE | R2 | Pairwise | MAE improvement vs train-mean baseline | MAE improvement vs difficulty rating |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.016027 | -0.0040 | 56.41% | 27.41% | 29.57% |
+| acc_std | 0.020069 | -0.0608 | 43.59% | 30.26% | 32.62% |
+| skill_gap | 0.029296 | -0.0130 | 57.69% | 23.28% | 24.85% |
+
+Notes:
+
+- Raising `max_notes` from 3000 to 7000 did not improve summary-model MAE on
+  this holdout; mean MAE moved from 0.02156 to 0.02180.
+- Holdout pairwise order improved from 45.30% to 52.56% on average, but the
+  validation pairwise curve was much weaker than the m3000 run.
+- Keep `pilot_top100_summary_cpu_real_clean` as the summary MAE baseline for
+  now. Use higher `MAX_NOTES` primarily for real sequence models on GPU, not as
+  a guaranteed summary-model improvement.
+
 ### LSTM CPU Feasibility Run
 
 Full-length CPU attempt:
@@ -237,6 +287,7 @@ Notes:
 - `outputs\pilot_top100_real_comparison.csv`
 - `outputs\pilot_top100_real_decision_summary.csv`
 - `outputs\runs\pilot_top100_summary_cpu_real_clean\run_report.html`
+- `outputs\runs\pilot_top100_summary_cpu_real_m7000\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
@@ -245,6 +296,8 @@ Notes:
 
 Do not trust the summary model as "good" yet. It reduces MAE on one holdout
 split, but its ranking signal is weak and predictions are compressed.
+The m7000 summary check did not beat the m3000 summary run on MAE, so raising
+`MAX_NOTES` is not automatically helpful for the summary model.
 
 Use `pilot_top100_forest_core_real` as the current small-data ranking baseline,
 because the 5-fold grouped CV result is more stable than the tiny 13-map holdout.

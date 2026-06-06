@@ -535,6 +535,94 @@ Notes:
   result as evidence that longer sequence training helps MAE, then test a
   larger LSTM and/or stronger ranking objective once GPU runtime is available.
 
+### LSTM CPU m3000 Tiny 12-Epoch Ranking Checkpoint
+
+This run repeats the 12-epoch tiny LSTM but selects `best_model.pt` by
+validation pairwise order instead of validation MAE. It tests whether the weak
+holdout ranking in the previous run was mostly a checkpoint-selection problem.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_lstm_cpu_real_m3000_tiny_e12_rankckpt `
+  --model lstm `
+  --epochs 12 `
+  --batch-size 4 `
+  --grad-accum-steps 4 `
+  --lr 0.001 `
+  --weight-decay 0.0001 `
+  --patience 5 `
+  --checkpoint-metric val_mean_pairwise_order_accuracy `
+  --group-column beatmapset_id `
+  --max-notes 3000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --huber-delta 0.5 `
+  --device cpu `
+  --amp off `
+  --loader-workers 0 `
+  --lstm-embed-dim 8 `
+  --lstm-hidden-dim 16 `
+  --lstm-layers 1 `
+  --lstm-dropout 0.0 `
+  --lstm-head-dropout 0.2 `
+  --seed 42
+```
+
+Validation curve:
+
+| Metric | Start | Final |
+| --- | ---: | ---: |
+| Validation mean MAE | 0.02094 | 0.01486 |
+| Validation pairwise order | 50.00% | 64.14% |
+
+Runtime:
+
+| Metric | Value |
+| --- | ---: |
+| Average epoch seconds | 32.58 |
+| Total epoch seconds | 391.01 |
+| Epochs completed | 12 / 12 |
+| Best checkpoint epoch | 8 |
+| Best checkpoint score | 64.14% validation pairwise |
+
+Holdout test metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.015203 | -0.0062 | -0.4670 | 33.33% | 31.14% |
+| acc_std | 0.016971 | 0.0004 | 0.4176 | 65.38% | 41.03% |
+| skill_gap | 0.027794 | -0.0179 | -0.3132 | 38.46% | 27.21% |
+
+Checkpoint comparison:
+
+| Run | Checkpoint metric | Best epoch | Mean holdout MAE | Mean holdout pairwise | Mean Improvement |
+| --- | --- | ---: | ---: | ---: | ---: |
+| LSTM m3000 tiny e12 | `val_mean_mae` | 12 | 0.019792 | 44.87% | 33.69% |
+| LSTM m3000 tiny e12 rankckpt | `val_mean_pairwise_order_accuracy` | 8 | 0.019989 | 45.73% | 33.13% |
+
+Prediction spread check:
+
+| Target | Actual std | Predicted std | Predicted / actual std | Bias |
+| --- | ---: | ---: | ---: | ---: |
+| mean_acc | 0.024237 | 0.000086 | 0.0035 | -0.000659 |
+| acc_std | 0.026729 | 0.000098 | 0.0037 | 0.001886 |
+| skill_gap | 0.041247 | 0.000232 | 0.0056 | 0.003700 |
+
+Notes:
+
+- Ranking checkpoint selection only nudged mean holdout pairwise order from
+  44.87% to 45.73%, while mean holdout MAE worsened slightly from 0.019792 to
+  0.019989.
+- The checkpoint metric is not the main blocker. `mean_acc` and `skill_gap`
+  still rank poorly, and predicted spread remains near constant.
+- Future sequence work should change training signal/model capacity/data
+  coverage rather than only selecting checkpoints by validation pairwise order.
+
 ### Tabular Forest Core
 
 Command:
@@ -1019,6 +1107,7 @@ Notes:
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e3\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12\run_report.html`
+- `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12_rankckpt\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
@@ -1055,6 +1144,9 @@ all three targets beat train-mean/difficulty-rating MAE baselines, but holdout
 pairwise order was only 44.87% and predictions still collapse to a near-constant
 band. Longer sequence training helps calibration/MAE, but it does not yet solve
 ranking or spread.
+Switching the same tiny LSTM to a validation-pairwise checkpoint only improved
+holdout mean pairwise from 44.87% to 45.73% and slightly worsened MAE, so weak
+ranking is not mainly a checkpoint-selection issue.
 
 Next training iteration:
 
@@ -1074,6 +1166,8 @@ Next training iteration:
    and preferably near 7000 if memory allows. Start from the m3000 tiny e12 CPU
    result as a learning-rate/runtime reference, but on GPU use a larger sequence
    model or ranking-aware tuning because the tiny CPU run still collapses to
-   near-constant predictions and weak holdout ranking.
+   near-constant predictions and weak holdout ranking. Do not rely on
+   `val_mean_pairwise_order_accuracy` checkpoint selection alone; it did not
+   materially fix holdout ranking.
 6. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

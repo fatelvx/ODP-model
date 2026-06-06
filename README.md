@@ -102,9 +102,9 @@ start outputs/runs/synthetic_smoke/run_report.html
 
 Each run saves:
 
-- `history.csv`: train/val loss, epoch seconds, LR, and CUDA peak memory per epoch
-- `learning_curve.png`: growth curve
-- `run_report.html`: includes Model Verdict, Training Health, and Training Performance tables for quick quality, loss, speed, LR, and memory checks
+- `history.csv`: train/val loss, validation MAE, validation pairwise order, epoch seconds, LR, and CUDA peak memory per epoch
+- `learning_curve.png`: loss curve plus validation MAE / pairwise-order curve when available
+- `run_report.html`: includes Model Verdict, Training Health, and Training Performance tables for quick quality, validation metrics, loss, speed, LR, and memory checks
 - `predictions.csv`: actual model outputs on the test split
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand

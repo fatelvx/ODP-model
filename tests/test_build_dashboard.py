@@ -49,10 +49,13 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "history.csv").write_text(
                 "\n".join(
                     [
-                        "epoch,train_loss,val_loss,epoch_seconds,lr,cuda_max_memory_mb",
-                        "1,0.5,0.4,1.0,0.001,100.0",
-                        "2,0.3,0.35,2.0,0.0005,150.0",
-                        "3,0.2,0.5,3.0,0.0001,125.0",
+                        (
+                            "epoch,train_loss,val_loss,val_mean_mae,"
+                            "val_mean_pairwise_order_accuracy,epoch_seconds,lr,cuda_max_memory_mb"
+                        ),
+                        "1,0.5,0.4,0.18,0.55,1.0,0.001,100.0",
+                        "2,0.3,0.35,0.12,0.72,2.0,0.0005,150.0",
+                        "3,0.2,0.5,0.14,0.68,3.0,0.0001,125.0",
                     ]
                 ),
                 encoding="utf-8",
@@ -135,6 +138,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("0.500000", html)
         self.assertIn("Training Health", html)
         self.assertIn("Best Epoch", html)
+        self.assertIn("Best Val MAE", html)
+        self.assertIn("Best Val Pairwise Order", html)
         self.assertIn("Overfit Signal", html)
         self.assertIn("Training Performance", html)
         self.assertIn("Peak CUDA Memory MB", html)

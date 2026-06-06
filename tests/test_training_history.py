@@ -18,6 +18,8 @@ class TrainingHistoryTests(unittest.TestCase):
                 1,
                 0.5,
                 0.4,
+                val_mean_mae=0.12,
+                val_mean_pairwise_order_accuracy=0.75,
                 epoch_seconds=1.25,
                 lr=0.001,
                 cuda_max_memory_mb=123.5,
@@ -25,9 +27,13 @@ class TrainingHistoryTests(unittest.TestCase):
 
             history = pd.read_csv(path)
 
+        self.assertIn("val_mean_mae", history.columns)
+        self.assertIn("val_mean_pairwise_order_accuracy", history.columns)
         self.assertIn("epoch_seconds", history.columns)
         self.assertIn("lr", history.columns)
         self.assertIn("cuda_max_memory_mb", history.columns)
+        self.assertEqual(float(history.loc[0, "val_mean_mae"]), 0.12)
+        self.assertEqual(float(history.loc[0, "val_mean_pairwise_order_accuracy"]), 0.75)
         self.assertEqual(float(history.loc[0, "epoch_seconds"]), 1.25)
         self.assertEqual(float(history.loc[0, "lr"]), 0.001)
         self.assertEqual(float(history.loc[0, "cuda_max_memory_mb"]), 123.5)
@@ -48,11 +54,15 @@ class TrainingHistoryTests(unittest.TestCase):
             "epoch",
             "train_loss",
             "val_loss",
+            "val_mean_mae",
+            "val_mean_pairwise_order_accuracy",
             "epoch_seconds",
             "lr",
             "cuda_max_memory_mb",
         ])
         self.assertEqual(len(history), 2)
+        self.assertTrue(pd.isna(history.loc[0, "val_mean_mae"]))
+        self.assertTrue(pd.isna(history.loc[0, "val_mean_pairwise_order_accuracy"]))
         self.assertTrue(pd.isna(history.loc[0, "epoch_seconds"]))
         self.assertEqual(float(history.loc[1, "epoch_seconds"]), 2.0)
 

@@ -14,14 +14,54 @@ import pandas as pd
 
 def plot_learning_curve(history_csv: Path, out_path: Path) -> None:
     history = pd.read_csv(history_csv)
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(history["epoch"], history["train_loss"], label="train")
-    ax.plot(history["epoch"], history["val_loss"], label="validation")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss")
-    ax.set_title("Learning Curve")
-    ax.grid(True, alpha=0.25)
-    ax.legend()
+    has_validation_metrics = (
+        "val_mean_mae" in history.columns
+        or "val_mean_pairwise_order_accuracy" in history.columns
+    )
+    if has_validation_metrics:
+        fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        loss_ax = axes[0]
+        metric_ax = axes[1]
+    else:
+        fig, loss_ax = plt.subplots(figsize=(8, 5))
+        metric_ax = None
+
+    loss_ax.plot(history["epoch"], history["train_loss"], label="train")
+    loss_ax.plot(history["epoch"], history["val_loss"], label="validation")
+    loss_ax.set_ylabel("Loss")
+    loss_ax.set_title("Learning Curve")
+    loss_ax.grid(True, alpha=0.25)
+    loss_ax.legend()
+
+    if metric_ax is not None:
+        if "val_mean_mae" in history.columns:
+            val_mean_mae = pd.to_numeric(history["val_mean_mae"], errors="coerce")
+            metric_ax.plot(history["epoch"], val_mean_mae, label="validation mean MAE")
+            metric_ax.set_ylabel("MAE")
+        if "val_mean_pairwise_order_accuracy" in history.columns:
+            pairwise_ax = metric_ax.twinx()
+            pairwise_order = pd.to_numeric(
+                history["val_mean_pairwise_order_accuracy"],
+                errors="coerce",
+            )
+            pairwise_ax.plot(
+                history["epoch"],
+                pairwise_order,
+                color="#c2410c",
+                label="validation pairwise order",
+            )
+            pairwise_ax.set_ylabel("Pairwise order")
+            pairwise_ax.set_ylim(0, 1)
+            lines, labels = metric_ax.get_legend_handles_labels()
+            pair_lines, pair_labels = pairwise_ax.get_legend_handles_labels()
+            metric_ax.legend(lines + pair_lines, labels + pair_labels, loc="best")
+        else:
+            metric_ax.legend(loc="best")
+        metric_ax.set_xlabel("Epoch")
+        metric_ax.grid(True, alpha=0.25)
+    else:
+        loss_ax.set_xlabel("Epoch")
+
     fig.tight_layout()
     fig.savefig(out_path, dpi=160)
     plt.close(fig)
@@ -95,7 +135,7 @@ def training_health_summary(history_csv: Path) -> dict[str, object]:
         if val_loss_regression > regression_threshold and generalization_gap > 0
         else "No obvious"
     )
-    return {
+    summary: dict[str, object] = {
         "best_epoch": int(best_row["epoch"]),
         "best_val_loss": best_val_loss,
         "final_epoch": int(final_row["epoch"]),
@@ -105,6 +145,30 @@ def training_health_summary(history_csv: Path) -> dict[str, object]:
         "val_loss_regression": val_loss_regression,
         "overfit_signal": overfit_signal,
     }
+    if "val_mean_mae" in history.columns:
+        val_mean_mae = pd.to_numeric(history["val_mean_mae"], errors="coerce")
+        metric_history = history.assign(_val_mean_mae=val_mean_mae).dropna(subset=["_val_mean_mae"])
+        if not metric_history.empty:
+            best_metric_row = metric_history.loc[metric_history["_val_mean_mae"].idxmin()]
+            final_metric_row = metric_history.iloc[-1]
+            summary["best_val_mean_mae_epoch"] = int(best_metric_row["epoch"])
+            summary["best_val_mean_mae"] = float(best_metric_row["_val_mean_mae"])
+            summary["final_val_mean_mae"] = float(final_metric_row["_val_mean_mae"])
+            summary["val_mean_mae_since_best"] = (
+                summary["final_val_mean_mae"] - summary["best_val_mean_mae"]
+            )
+    if "val_mean_pairwise_order_accuracy" in history.columns:
+        pairwise_order = pd.to_numeric(history["val_mean_pairwise_order_accuracy"], errors="coerce")
+        metric_history = history.assign(_val_pairwise_order=pairwise_order).dropna(
+            subset=["_val_pairwise_order"]
+        )
+        if not metric_history.empty:
+            best_metric_row = metric_history.loc[metric_history["_val_pairwise_order"].idxmax()]
+            final_metric_row = metric_history.iloc[-1]
+            summary["best_val_pairwise_order_epoch"] = int(best_metric_row["epoch"])
+            summary["best_val_pairwise_order"] = float(best_metric_row["_val_pairwise_order"])
+            summary["final_val_pairwise_order"] = float(final_metric_row["_val_pairwise_order"])
+    return summary
 
 
 def training_health_html(history_csv: Path, *, heading_level: int = 2) -> str:
@@ -122,6 +186,27 @@ def training_health_html(history_csv: Path, *, heading_level: int = 2) -> str:
         ("Val Loss Since Best", f"{summary['val_loss_regression']:.6f}"),
         ("Overfit Signal", summary["overfit_signal"]),
     ]
+    if "best_val_mean_mae" in summary:
+        rows.extend(
+            [
+                (
+                    "Best Val MAE",
+                    f"{summary['best_val_mean_mae']:.6f} @ epoch {summary['best_val_mean_mae_epoch']}",
+                ),
+                ("Final Val MAE", f"{summary['final_val_mean_mae']:.6f}"),
+                ("Val MAE Since Best", f"{summary['val_mean_mae_since_best']:.6f}"),
+            ]
+        )
+    if "best_val_pairwise_order" in summary:
+        rows.extend(
+            [
+                (
+                    "Best Val Pairwise Order",
+                    f"{summary['best_val_pairwise_order']:.2%} @ epoch {summary['best_val_pairwise_order_epoch']}",
+                ),
+                ("Final Val Pairwise Order", f"{summary['final_val_pairwise_order']:.2%}"),
+            ]
+        )
     row_html = "".join(
         f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
         for label, value in rows

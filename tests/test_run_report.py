@@ -43,6 +43,8 @@ class RunReportTests(unittest.TestCase):
                         "epoch": 1,
                         "train_loss": 0.5,
                         "val_loss": 0.4,
+                        "val_mean_mae": 0.18,
+                        "val_mean_pairwise_order_accuracy": 0.55,
                         "epoch_seconds": 1.0,
                         "lr": 0.001,
                         "cuda_max_memory_mb": 100.0,
@@ -51,6 +53,8 @@ class RunReportTests(unittest.TestCase):
                         "epoch": 2,
                         "train_loss": 0.3,
                         "val_loss": 0.35,
+                        "val_mean_mae": 0.12,
+                        "val_mean_pairwise_order_accuracy": 0.72,
                         "epoch_seconds": 2.0,
                         "lr": 0.0005,
                         "cuda_max_memory_mb": 150.0,
@@ -59,6 +63,8 @@ class RunReportTests(unittest.TestCase):
                         "epoch": 3,
                         "train_loss": 0.2,
                         "val_loss": 0.5,
+                        "val_mean_mae": 0.14,
+                        "val_mean_pairwise_order_accuracy": 0.68,
                         "epoch_seconds": 3.0,
                         "lr": 0.0001,
                         "cuda_max_memory_mb": 125.0,
@@ -114,6 +120,10 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("16", report)
         self.assertIn("Training Health", report)
         self.assertIn("Best Epoch", report)
+        self.assertIn("Best Val MAE", report)
+        self.assertIn("0.120000", report)
+        self.assertIn("Best Val Pairwise Order", report)
+        self.assertIn("72.00%", report)
         self.assertIn("Generalization Gap", report)
         self.assertIn("Overfit Signal", report)
         self.assertIn("Possible", report)

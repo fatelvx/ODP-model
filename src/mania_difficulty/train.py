@@ -42,6 +42,8 @@ HISTORY_COLUMNS = [
     "epoch",
     "train_loss",
     "val_loss",
+    "val_mean_mae",
+    "val_mean_pairwise_order_accuracy",
     "epoch_seconds",
     "lr",
     "cuda_max_memory_mb",
@@ -389,6 +391,8 @@ def append_history(
     train_loss: float,
     val_loss: float,
     *,
+    val_mean_mae: float | None = None,
+    val_mean_pairwise_order_accuracy: float | None = None,
     epoch_seconds: float | None = None,
     lr: float | None = None,
     cuda_max_memory_mb: float | None = None,
@@ -401,11 +405,31 @@ def append_history(
                 "epoch": epoch,
                 "train_loss": train_loss,
                 "val_loss": val_loss,
+                "val_mean_mae": "" if val_mean_mae is None else val_mean_mae,
+                "val_mean_pairwise_order_accuracy": (
+                    "" if val_mean_pairwise_order_accuracy is None else val_mean_pairwise_order_accuracy
+                ),
                 "epoch_seconds": "" if epoch_seconds is None else epoch_seconds,
                 "lr": "" if lr is None else lr,
                 "cuda_max_memory_mb": "" if cuda_max_memory_mb is None else cuda_max_memory_mb,
             }
         )
+
+
+def validation_history_metrics(
+    actual: np.ndarray,
+    pred: np.ndarray,
+    target_columns: list[str],
+) -> dict[str, float]:
+    report = regression_report(actual, pred, target_columns)
+    maes = [values["mae"] for values in report.values()]
+    pairwise_values = [values["pairwise_order_accuracy"] for values in report.values()]
+    return {
+        "val_mean_mae": float(np.mean(maes)) if maes else 0.0,
+        "val_mean_pairwise_order_accuracy": (
+            float(np.mean(pairwise_values)) if pairwise_values else 0.0
+        ),
+    }
 
 
 def write_predictions(
@@ -869,7 +893,14 @@ def train_tabular_forest(
 
     history_csv = run_dir / "history.csv"
     write_history_header(history_csv)
-    append_history(history_csv, 1, train_loss, val_loss)
+    val_history_metrics = validation_history_metrics(y_val, val_pred, target_columns)
+    append_history(
+        history_csv,
+        1,
+        train_loss,
+        val_loss,
+        **val_history_metrics,
+    )
 
     checkpoint_path = run_dir / "best_model.joblib"
     joblib.dump(
@@ -1086,7 +1117,7 @@ def train(args: argparse.Namespace) -> Path:
 
         scheduler.step()
         train_loss = float(np.mean(train_losses))
-        val_loss, _, _, _ = evaluate_loader(
+        val_loss, val_pred, val_actual, _ = evaluate_loader(
             model,
             val_loader,
             device,
@@ -1096,6 +1127,7 @@ def train(args: argparse.Namespace) -> Path:
             target_std_np,
             amp_active,
         )
+        val_history_metrics = validation_history_metrics(val_actual, val_pred, target_columns)
         if device.type == "cuda":
             torch.cuda.synchronize(device)
             cuda_max_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 * 1024)
@@ -1107,6 +1139,7 @@ def train(args: argparse.Namespace) -> Path:
             epoch,
             train_loss,
             val_loss,
+            **val_history_metrics,
             epoch_seconds=epoch_seconds,
             lr=epoch_lr,
             cuda_max_memory_mb=cuda_max_memory_mb,
@@ -1118,6 +1151,8 @@ def train(args: argparse.Namespace) -> Path:
         )
         print(
             f"epoch={epoch:03d} train_loss={train_loss:.5f} val_loss={val_loss:.5f} "
+            f"val_mae={val_history_metrics['val_mean_mae']:.5f} "
+            f"val_pairwise={val_history_metrics['val_mean_pairwise_order_accuracy']:.2%} "
             f"epoch_seconds={epoch_seconds:.2f} lr={epoch_lr:.6g}{memory_text}"
         )
 

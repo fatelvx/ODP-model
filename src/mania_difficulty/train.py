@@ -1046,6 +1046,11 @@ def train_tabular_forest(
         "best_epoch": 1,
         "best_val_loss": val_loss,
         "test_loss": test_loss,
+        "epochs_requested": 1,
+        "epochs_completed": 1,
+        "stop_reason": "single_pass",
+        "early_stopped": False,
+        "patience_left": "",
         "train_size": len(train_indices),
         "val_size": len(val_indices),
         "test_size": len(test_indices),
@@ -1163,6 +1168,8 @@ def train(args: argparse.Namespace) -> Path:
     resumed_from_epoch = 0
     restored_from_backup = False
     start_epoch = 1
+    epochs_completed = 0
+    stop_reason = "completed"
 
     if resume_requested and backup_run_dir and not last_checkpoint_path.exists():
         restored_paths = restore_checkpoint_backup(run_dir, backup_run_dir)
@@ -1205,6 +1212,7 @@ def train(args: argparse.Namespace) -> Path:
             patience_left = int(resume_checkpoint.get("patience_left", patience_left))
         resumed_from_epoch = int(resume_checkpoint.get("epoch", 0))
         start_epoch = resumed_from_epoch + 1
+        epochs_completed = resumed_from_epoch
         if not history_csv.exists():
             write_history_header(history_csv)
         print(f"Resuming from epoch {resumed_from_epoch}; next epoch is {start_epoch}.")
@@ -1213,7 +1221,11 @@ def train(args: argparse.Namespace) -> Path:
         if resume_requested:
             print(f"--resume was set but {last_checkpoint_path} was not found; starting fresh.")
 
+    if start_epoch > args.epochs:
+        stop_reason = "already_completed"
+
     for epoch in range(start_epoch, args.epochs + 1):
+        epochs_completed = epoch
         epoch_start_time = time.perf_counter()
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(device)
@@ -1340,6 +1352,7 @@ def train(args: argparse.Namespace) -> Path:
             if copied_paths:
                 print(f"Backed up {len(copied_paths)} checkpoint files to {backup_run_dir}.")
         if patience_left <= 0:
+            stop_reason = "early_stopping"
             print(f"Early stopping at epoch {epoch}; best epoch was {best_epoch}.")
             break
 
@@ -1403,6 +1416,11 @@ def train(args: argparse.Namespace) -> Path:
         "checkpoint_metric": checkpoint_metric,
         "best_checkpoint_score": best_checkpoint_score,
         "test_loss": test_loss,
+        "epochs_requested": args.epochs,
+        "epochs_completed": epochs_completed,
+        "stop_reason": stop_reason,
+        "early_stopped": stop_reason == "early_stopping",
+        "patience_left": patience_left,
         "amp": getattr(args, "amp", "auto"),
         "amp_enabled": amp_active,
         "batch_size": args.batch_size,

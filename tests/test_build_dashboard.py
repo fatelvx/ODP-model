@@ -97,6 +97,9 @@ class BuildDashboardTests(unittest.TestCase):
                             "device": "cuda",
                             "amp_enabled": True,
                             "effective_batch_size": 64,
+                            "epochs_completed": 3,
+                            "stop_reason": "early_stopping",
+                            "early_stopped": True,
                             "checkpoint_metric": "val_mean_pairwise_order_accuracy",
                             "best_checkpoint_score": 0.72,
                         },
@@ -170,6 +173,10 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("cuda", decision_summary)
         self.assertIn("amp_enabled", decision_summary)
         self.assertIn("effective_batch_size", decision_summary)
+        self.assertIn("epochs_completed", decision_summary)
+        self.assertIn("stop_reason", decision_summary)
+        self.assertIn("early_stopped", decision_summary)
+        self.assertIn("early_stopping", decision_summary)
         self.assertIn("Fix acc_std before longer training", decision_summary)
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)

@@ -137,6 +137,11 @@ class RunReportTests(unittest.TestCase):
                             "checkpoint_metric": "val_mean_pairwise_order_accuracy",
                             "best_checkpoint_score": 0.72,
                             "best_epoch": 2,
+                            "epochs_requested": 5,
+                            "epochs_completed": 3,
+                            "stop_reason": "early_stopping",
+                            "early_stopped": True,
+                            "patience_left": 0,
                             "resume": True,
                             "resumed_from_epoch": 2,
                             "checkpoint_backup_dir": "drive/checkpoints/run_a",
@@ -181,6 +186,12 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Best Checkpoint Score", report)
         self.assertIn("<tr><th>Best Checkpoint Score</th><td>72.00%</td></tr>", report)
         self.assertIn("Checkpoint Best Epoch", report)
+        self.assertIn("Epochs Requested", report)
+        self.assertIn("Epochs Completed", report)
+        self.assertIn("Stop Reason", report)
+        self.assertIn("early_stopping", report)
+        self.assertIn("Early Stopped", report)
+        self.assertIn("Patience Left", report)
         self.assertIn("Training Health", report)
         self.assertIn("Best Epoch", report)
         self.assertIn("Best Val MAE", report)

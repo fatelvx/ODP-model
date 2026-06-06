@@ -385,9 +385,10 @@ python -m mania_difficulty.tools.build_dashboard `
 
 Start with the dashboard's `Run Decision Summary` table when comparing runs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
-the generated `Next Action`; it also keeps device, AMP, and effective batch
-size visible so Colab GPU runs are easier to compare. Then use the run cards
-below it for plots and human-review files. The dashboard command also writes
+the generated `Next Action`; it also keeps device, AMP, effective batch size,
+epochs completed, and stop reason visible so Colab GPU runs are easier to
+compare. Then use the run cards below it for plots and human-review files. The
+dashboard command also writes
 `run_decision_summary.csv` beside the HTML so the same summary can be sorted,
 saved, or included in Colab output downloads.
 

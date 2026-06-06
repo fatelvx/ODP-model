@@ -944,6 +944,37 @@ def tabular_arrays(
     )
 
 
+def tabular_sample_weights(
+    dataset: ManiaDifficultyDataset,
+    indices: list[int],
+) -> np.ndarray | None:
+    column = getattr(dataset, "sample_weight_column", "")
+    if not column:
+        return None
+    weights = [
+        label_sample_weight(
+            dataset.labels.iloc[index][column],
+            min_weight=dataset.sample_weight_min,
+            max_value=dataset.sample_weight_max_value,
+        )
+        for index in indices
+    ]
+    return np.asarray(weights, dtype="float32")
+
+
+def fit_tabular_model(
+    model: object,
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    sample_weights: np.ndarray | None = None,
+) -> None:
+    if sample_weights is None:
+        model.fit(x, y)
+    else:
+        model.fit(x, y, sample_weight=sample_weights)
+
+
 def write_feature_importance(path: Path, importances: np.ndarray, feature_names: list[str]) -> None:
     rows = sorted(
         zip(feature_names, importances, strict=True),
@@ -1022,7 +1053,12 @@ def write_tabular_cross_validation(
         train_idx_array = np.asarray(train_idx, dtype=int)
         val_idx_array = np.asarray(val_idx, dtype=int)
         model = create_tabular_forest_model(args, seed=args.seed + fold_index)
-        model.fit(x_all[train_idx_array], y_all[train_idx_array])
+        fit_tabular_model(
+            model,
+            x_all[train_idx_array],
+            y_all[train_idx_array],
+            sample_weights=tabular_sample_weights(dataset, train_idx),
+        )
         fold_pred = model.predict(x_all[val_idx_array]).astype("float32")
         fold_baseline = repeat_baseline(y_all[val_idx_array], y_all[train_idx_array].mean(axis=0))
         oof_pred[val_idx_array] = fold_pred
@@ -1132,7 +1168,12 @@ def train_tabular_forest(
     )
 
     model = create_tabular_forest_model(args, seed=args.seed)
-    model.fit(x_train, y_train)
+    fit_tabular_model(
+        model,
+        x_train,
+        y_train,
+        sample_weights=tabular_sample_weights(dataset, train_indices),
+    )
 
     train_pred = model.predict(x_train)
     val_pred = model.predict(x_val)

@@ -57,6 +57,17 @@ python -m mania_difficulty.train `
   --run-name synthetic_smoke
 ```
 
+For small real datasets, also train the tabular forest baseline. It is usually
+more stable than a neural sequence model before we have many labels:
+
+```powershell
+python -m mania_difficulty.train `
+  --labels data/processed/synthetic/labels.csv `
+  --sequences data/processed/synthetic/sequences `
+  --model tabular_forest `
+  --run-name synthetic_forest_smoke
+```
+
 Open the generated report:
 
 ```powershell
@@ -114,7 +125,17 @@ python -m mania_difficulty.data.fetch_scores `
   --min-scores 30
 ```
 
-Train:
+Train a small-data forest baseline:
+
+```powershell
+python -m mania_difficulty.train `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --model tabular_forest `
+  --run-name forest_top100_baseline
+```
+
+Train the sequence model:
 
 ```powershell
 python -m mania_difficulty.train `
@@ -127,8 +148,17 @@ python -m mania_difficulty.train `
 ```
 
 For local CPU pilots, use `--model summary`. It is much faster and is meant to
-prove the data/label signal before spending GPU time. Use `--model lstm` in
-Colab or on a GPU machine.
+prove the data/label signal before spending GPU time. Use `--model
+tabular_forest` as the small-data baseline and `--model lstm` in Colab or on a
+GPU machine.
+
+Compare runs:
+
+```powershell
+python -m mania_difficulty.tools.compare_runs `
+  outputs/runs/forest_top100_baseline `
+  outputs/runs/lstm_top100_baseline
+```
 
 Predict one `.osu` file after training:
 

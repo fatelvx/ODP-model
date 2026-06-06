@@ -53,6 +53,20 @@ def plot_prediction_scatter(
     plt.close(fig)
 
 
+def plot_feature_importance(importances_csv: Path, out_path: Path, *, top_n: int = 20) -> None:
+    importances = pd.read_csv(importances_csv).head(top_n)
+    fig_height = max(4, 0.32 * len(importances) + 1.2)
+    fig, ax = plt.subplots(figsize=(8, fig_height))
+    ax.barh(importances["feature"], importances["importance"])
+    ax.invert_yaxis()
+    ax.set_xlabel("Importance")
+    ax.set_title("Top Feature Importances")
+    ax.grid(True, axis="x", alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=160)
+    plt.close(fig)
+
+
 def write_run_report(
     run_dir: Path,
     *,
@@ -60,6 +74,7 @@ def write_run_report(
     metrics_path: Path | None = None,
     learning_curve_name: str = "learning_curve.png",
     prediction_scatter_name: str = "prediction_scatter.png",
+    feature_importance_name: str = "feature_importance.png",
 ) -> None:
     metrics_html = "<p>No metrics yet.</p>"
     if metrics_path and metrics_path.exists():
@@ -89,6 +104,11 @@ def write_run_report(
         if prediction_scatter_name and (run_dir / prediction_scatter_name).exists()
         else "<p>No prediction scatter image in this report.</p>"
     )
+    feature_importance_html = (
+        f'<p><img src="{html.escape(feature_importance_name)}" alt="Feature importance"></p>'
+        if feature_importance_name and (run_dir / feature_importance_name).exists()
+        else ""
+    )
 
     report = f"""<!doctype html>
 <html lang="en">
@@ -114,6 +134,7 @@ def write_run_report(
   {learning_curve_html}
   <h2>Predicted vs Observed Proxy</h2>
   {scatter_html}
+  {f"<h2>Feature Importance</h2>{feature_importance_html}" if feature_importance_html else ""}
   <h2>Files</h2>
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
   <p>Open <code>human_review.csv</code> for maps that need human judgment.</p>

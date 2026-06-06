@@ -7,11 +7,15 @@ import random
 from functools import partial
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Subset
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.preprocessing import StandardScaler
 
 from mania_difficulty.data.dataset import (
     DEFAULT_TARGET_COLUMNS,
@@ -20,7 +24,9 @@ from mania_difficulty.data.dataset import (
 )
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
+from mania_difficulty.models.tabular import SUMMARY_FEATURE_NAMES, summarize_sequence
 from mania_difficulty.visualize import (
+    plot_feature_importance,
     plot_learning_curve,
     plot_prediction_scatter,
     write_run_report,
@@ -60,6 +66,18 @@ def transform_targets(targets: torch.Tensor, mean: torch.Tensor, std: torch.Tens
 
 def inverse_transform(array: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.ndarray:
     return array * std + mean
+
+
+def parse_max_features(value: str) -> str | float:
+    if value in {"sqrt", "log2"}:
+        return value
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Use sqrt, log2, or a float in (0, 1].") from error
+    if not 0 < parsed <= 1:
+        raise argparse.ArgumentTypeError("Float max_features must be in (0, 1].")
+    return parsed
 
 
 def weighted_huber_loss(pred: torch.Tensor, target: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
@@ -192,6 +210,118 @@ def write_human_review(
     review.to_csv(path, index=False, encoding="utf-8")
 
 
+def tabular_arrays(
+    dataset: ManiaDifficultyDataset,
+    indices: list[int],
+    *,
+    max_notes: int,
+) -> tuple[np.ndarray, np.ndarray, list[int]]:
+    features = []
+    targets = []
+    beatmap_ids = []
+    for index in indices:
+        sample = dataset[index]
+        sequence = np.asarray(sample["features"], dtype="float32")[:max_notes]
+        features.append(summarize_sequence(sequence))
+        targets.append(np.asarray(sample["targets"], dtype="float32"))
+        beatmap_ids.append(int(sample["beatmap_id"]))
+    return (
+        np.stack(features).astype("float32"),
+        np.stack(targets).astype("float32"),
+        beatmap_ids,
+    )
+
+
+def write_feature_importance(path: Path, importances: np.ndarray) -> None:
+    rows = sorted(
+        zip(SUMMARY_FEATURE_NAMES, importances, strict=True),
+        key=lambda item: float(item[1]),
+        reverse=True,
+    )
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["feature", "importance"])
+        writer.writeheader()
+        for feature, importance in rows:
+            writer.writerow({"feature": feature, "importance": float(importance)})
+
+
+def train_tabular_forest(
+    args: argparse.Namespace,
+    dataset: ManiaDifficultyDataset,
+    target_columns: list[str],
+    run_dir: Path,
+    train_indices: list[int],
+    val_indices: list[int],
+    test_indices: list[int],
+) -> Path:
+    x_train, y_train, _ = tabular_arrays(dataset, train_indices, max_notes=args.max_notes)
+    x_val, y_val, _ = tabular_arrays(dataset, val_indices, max_notes=args.max_notes)
+    x_test, y_test, beatmap_ids = tabular_arrays(dataset, test_indices, max_notes=args.max_notes)
+
+    regressor = ExtraTreesRegressor(
+        n_estimators=args.forest_trees,
+        min_samples_leaf=args.forest_min_samples_leaf,
+        max_features=args.forest_max_features,
+        random_state=args.seed,
+        n_jobs=args.workers,
+    )
+    model = TransformedTargetRegressor(regressor=regressor, transformer=StandardScaler())
+    model.fit(x_train, y_train)
+
+    train_pred = model.predict(x_train)
+    val_pred = model.predict(x_val)
+    test_pred = model.predict(x_test)
+    train_loss = float(np.mean(np.abs(train_pred - y_train)))
+    val_loss = float(np.mean(np.abs(val_pred - y_val)))
+    test_loss = float(np.mean(np.abs(test_pred - y_test)))
+
+    history_csv = run_dir / "history.csv"
+    write_history_header(history_csv)
+    append_history(history_csv, 1, train_loss, val_loss)
+
+    checkpoint_path = run_dir / "best_model.joblib"
+    joblib.dump(
+        {
+            "model": model,
+            "model_name": args.model,
+            "target_columns": target_columns,
+            "feature_names": SUMMARY_FEATURE_NAMES,
+            "max_notes": args.max_notes,
+        },
+        checkpoint_path,
+    )
+
+    predictions_csv = run_dir / "predictions.csv"
+    write_predictions(predictions_csv, beatmap_ids, y_test, test_pred, target_columns)
+    write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
+
+    metrics = regression_report(y_test, test_pred, target_columns)
+    metrics["_run"] = {
+        "model_name": args.model,
+        "seed": args.seed,
+        "best_epoch": 1,
+        "best_val_loss": val_loss,
+        "test_loss": test_loss,
+        "train_size": len(train_indices),
+        "val_size": len(val_indices),
+        "test_size": len(test_indices),
+        "checkpoint": checkpoint_path.name,
+    }
+    metrics_path = run_dir / "metrics.json"
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+
+    feature_importance_csv = run_dir / "feature_importance.csv"
+    write_feature_importance(feature_importance_csv, model.regressor_.feature_importances_)
+    plot_feature_importance(feature_importance_csv, run_dir / "feature_importance.png")
+    plot_learning_curve(history_csv, run_dir / "learning_curve.png")
+    plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
+    write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
+
+    (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2, default=str), encoding="utf-8")
+    print(f"Run artifacts written to {run_dir}")
+    return run_dir
+
+
 def train(args: argparse.Namespace) -> Path:
     seed_everything(args.seed)
     target_columns = [column.strip() for column in args.targets.split(",") if column.strip()]
@@ -203,6 +333,17 @@ def train(args: argparse.Namespace) -> Path:
         raise RuntimeError("Need at least 10 maps for train/val/test split.")
 
     train_indices, val_indices, test_indices = split_indices(len(dataset), args.seed)
+    if args.model == "tabular_forest":
+        return train_tabular_forest(
+            args,
+            dataset,
+            target_columns,
+            run_dir,
+            train_indices,
+            val_indices,
+            test_indices,
+        )
+
     target_mean_np, target_std_np = target_stats(dataset, train_indices)
 
     collate = partial(collate_batch, max_notes=args.max_notes)
@@ -314,6 +455,8 @@ def train(args: argparse.Namespace) -> Path:
 
     metrics = regression_report(actual, pred, target_columns)
     metrics["_run"] = {
+        "model_name": args.model,
+        "seed": args.seed,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "test_loss": test_loss,
@@ -349,9 +492,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="")
     parser.add_argument(
         "--model",
-        choices=["summary", "lstm"],
+        choices=["summary", "lstm", "tabular_forest"],
         default="lstm",
-        help="Use summary for fast CPU pilots; use lstm for the sequence baseline.",
+        help="Use tabular_forest for small-data baseline, summary for fast neural CPU pilots, lstm for sequence GPU runs.",
     )
     parser.add_argument(
         "--loss-weights",
@@ -360,6 +503,10 @@ def parse_args() -> argparse.Namespace:
         default=[1.0, 0.5, 0.5],
         help="Weights matching --targets. Falls back to all ones if the count differs.",
     )
+    parser.add_argument("--forest-trees", type=int, default=400)
+    parser.add_argument("--forest-min-samples-leaf", type=int, default=2)
+    parser.add_argument("--forest-max-features", type=parse_max_features, default="sqrt")
+    parser.add_argument("--workers", type=int, default=-1)
     return parser.parse_args()
 
 

@@ -574,6 +574,70 @@ Notes:
   Keep `pilot_top100_forest_core_pairwise_weighted_real` as the reliability/MAE
   comparison run.
 
+### Tabular Forest Weighted Seed Stability Check
+
+Command shape:
+
+```powershell
+$seeds = 7,13,42,99,123
+foreach ($seed in $seeds) {
+  .\.venv\Scripts\python.exe -m mania_difficulty.train `
+    --labels data\processed\labels_pilot_top100.csv `
+    --sequences data\processed\sequences_pilot `
+    --run-name "pilot_top100_forest_core_pairwise_weighted_stability_seed${seed}_real" `
+    --model tabular_forest `
+    --feature-set core `
+    --forest-trees 200 `
+    --forest-min-samples-leaf 2 `
+    --forest-max-features sqrt `
+    --cv-folds 5 `
+    --group-column beatmapset_id `
+    --max-notes 7000 `
+    --sample-weight-column score_count `
+    --sample-weight-min 0.25 `
+    --sample-weight-max-value 100 `
+    --workers -1 `
+    --seed $seed
+}
+```
+
+5-seed weighted grouped out-of-fold stability:
+
+| Seed | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement | Targets beating baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.025605 | -0.0261 | 0.2227 | 57.24% | 7.09% | 3 / 3 |
+| 13 | 0.024414 | 0.0585 | 0.3292 | 60.42% | 10.85% | 3 / 3 |
+| 42 | 0.023189 | 0.0925 | 0.4330 | 64.46% | 14.53% | 3 / 3 |
+| 99 | 0.025242 | -0.0297 | 0.1725 | 55.61% | 8.15% | 3 / 3 |
+| 123 | 0.025559 | -0.0620 | 0.2012 | 56.26% | 8.82% | 3 / 3 |
+| Mean +/- std | 0.024802 +/- 0.000913 | 0.0066 +/- 0.0586 | 0.2717 +/- 0.0965 | 58.80% +/- 3.28% | 9.89% +/- 2.62% | - |
+
+Comparison against unweighted 5-seed forest:
+
+| Run group | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Unweighted 5-seed forest | 0.025329 +/- 0.001089 | 0.0088 +/- 0.0713 | 0.2688 +/- 0.1110 | 58.75% +/- 3.82% | 8.00% +/- 3.26% |
+| Score-count weighted 5-seed forest | 0.024802 +/- 0.000913 | 0.0066 +/- 0.0586 | 0.2717 +/- 0.0965 | 58.80% +/- 3.28% | 9.89% +/- 2.62% |
+
+Weighted holdout sanity check:
+
+| Seed | Mean holdout MAE | Mean holdout R2 | Mean holdout Pairwise | Mean Improvement | Targets beating baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.034958 | -0.4499 | 45.10% | -10.36% | 0 / 3 |
+| 13 | 0.014865 | -2.9235 | 55.24% | 42.99% | 3 / 3 |
+| 42 | 0.029944 | -0.5343 | 48.72% | -1.02% | 1 / 3 |
+| 99 | 0.033304 | -1.0829 | 39.29% | -8.14% | 0 / 3 |
+| 123 | 0.025117 | -0.5982 | 61.22% | 10.58% | 3 / 3 |
+
+Notes:
+
+- Score-count weighting consistently reduced grouped-CV MAE in all five seeds
+  and reduced seed-to-seed MAE variance.
+- Ranking did not meaningfully change: weighted and unweighted mean pairwise
+  order are both about 58.8%.
+- Keep weighting enabled when optimizing reliability/MAE on this pilot dataset,
+  but do not expect it to solve ranking without better labels or more maps.
+
 ### Tabular Forest Burst
 
 Command:
@@ -625,6 +689,7 @@ Notes:
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_weighted_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_pairwise_weighted_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
 ## Current Decision
@@ -639,12 +704,11 @@ The m7000 summary check did not beat the m3000 summary run on MAE, so raising
 `MAX_NOTES` is not automatically helpful for the summary model.
 
 Use the core 200-tree forest as the current small-data ranking baseline, but
-read the seed 42 run as optimistic. The 5-seed grouped-CV estimate is
-0.02533 +/- 0.00109 mean MAE and 58.75% +/- 3.82% pairwise order. This is still
-more stable than summary holdout tuning, but not strong enough to claim final
-model quality.
-Use `pilot_top100_forest_core_pairwise_weighted_real` only when comparing
-label-reliability weighting: it improves mean CV MAE but slightly hurts ranking.
+read the seed 42 run as optimistic. The unweighted 5-seed grouped-CV estimate is
+0.02533 +/- 0.00109 mean MAE and 58.75% +/- 3.82% pairwise order. Score-count
+weighting improves this to 0.02480 +/- 0.00091 mean MAE and 58.80% +/- 3.28%
+pairwise order, so use weighting for reliability/MAE comparisons while treating
+ranking as essentially unchanged.
 Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
 the run is heavily truncated and ranking is weaker than the current baselines.
 
@@ -652,7 +716,8 @@ Next training iteration:
 
 1. Prefer `feature-set=core`, 200 trees, leaf 2, and `sqrt` max features for
    tabular pilot comparisons, but report multi-seed CV averages instead of a
-   single seed 42 score.
+   single seed 42 score. Enable `score_count` weighting when the comparison is
+   about MAE/reliability rather than pure rank order.
 2. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
    effective batch size 16 as a local smoke/tuning baseline only; require
    multi-seed or grouped-CV evidence before trusting summary quality.

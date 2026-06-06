@@ -168,6 +168,20 @@ python -m mania_difficulty.data.fetch_scores `
   --min-scores 30
 ```
 
+Audit label/sequence coverage before training:
+
+```powershell
+python -m mania_difficulty.tools.audit_dataset `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --out-dir outputs/dataset_audit_top100
+```
+
+The audit writes `dataset_audit.json`, `missing_sequences.csv`,
+`dataset_distributions.png`, and `dataset_audit.html` so we can catch missing
+parsed files, weak label coverage, or narrow target distributions before
+spending GPU time.
+
 Train a small-data forest baseline:
 
 ```powershell

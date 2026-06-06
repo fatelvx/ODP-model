@@ -458,6 +458,10 @@ Recommended workflow:
 
 The notebook includes a synthetic smoke path and a real-data path. For real
 data, keep API credentials in the notebook session only; do not commit them.
+The Check GPU cell sets `TRAIN_DEVICE`, `LOADER_WORKERS`, and `AMP_MODE` once,
+then the smoke test, neural sweep, final training, embedding projection, and
+attention map cells reuse those settings. If the runtime is still CPU, the cell
+prints a warning before real neural training time is wasted.
 The real-data path keeps LSTM as the normal Colab default, but if the neural
 sweep is changed to include `transformer`, the final run and dashboard use
 `colab_{model}_top100` automatically. If Colab reports CUDA out-of-memory,

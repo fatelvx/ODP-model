@@ -21,6 +21,11 @@ class ColabNotebookTests(unittest.TestCase):
         self.assertIn("prediction_summary.csv", source)
         self.assertIn("cv_prediction_summary.csv", source)
         self.assertIn("calibration_warning", source)
+        self.assertIn("TRAIN_DEVICE", source)
+        self.assertIn("LOADER_WORKERS", source)
+        self.assertIn("AMP_MODE", source)
+        self.assertIn('"--device", TRAIN_DEVICE', source)
+        self.assertIn('"--loader-workers", str(LOADER_WORKERS)', source)
 
 
 if __name__ == "__main__":

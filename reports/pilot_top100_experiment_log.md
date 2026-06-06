@@ -445,6 +445,96 @@ Notes:
   predicts a narrow average band. This is not ready to promote; it is a useful
   Colab parameter calibration run for a longer GPU sequence model.
 
+### LSTM CPU m3000 Tiny 12-Epoch Check
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_lstm_cpu_real_m3000_tiny_e12 `
+  --model lstm `
+  --epochs 12 `
+  --batch-size 4 `
+  --grad-accum-steps 4 `
+  --lr 0.001 `
+  --weight-decay 0.0001 `
+  --patience 5 `
+  --checkpoint-metric val_mean_mae `
+  --group-column beatmapset_id `
+  --max-notes 3000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --huber-delta 0.5 `
+  --device cpu `
+  --amp off `
+  --loader-workers 0 `
+  --lstm-embed-dim 8 `
+  --lstm-hidden-dim 16 `
+  --lstm-layers 1 `
+  --lstm-dropout 0.0 `
+  --lstm-head-dropout 0.2 `
+  --seed 42
+```
+
+Validation curve:
+
+| Metric | Start | Final |
+| --- | ---: | ---: |
+| Validation mean MAE | 0.02094 | 0.01486 |
+| Validation pairwise order | 50.00% | 64.14% |
+
+Runtime:
+
+| Metric | Value |
+| --- | ---: |
+| Average epoch seconds | 33.70 |
+| Total epoch seconds | 404.43 |
+| Epochs completed | 12 / 12 |
+| Effective batch size | 16 |
+
+Holdout test metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline | MAE improvement vs difficulty rating |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.015153 | -0.0055 | -0.5275 | 32.05% | 31.37% | 33.41% |
+| acc_std | 0.016939 | 0.0007 | 0.3901 | 64.10% | 41.14% | 43.13% |
+| skill_gap | 0.027285 | -0.0151 | -0.3132 | 38.46% | 28.55% | 30.01% |
+
+Comparison against earlier sequence CPU checks:
+
+| Run | Mean holdout MAE | Mean R2 | Mean Spearman | Mean Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LSTM m1200 CPU | 0.025743 | -0.1174 | -0.3040 | 40.60% | 14.36% |
+| LSTM m3000 tiny e3 | 0.024430 | -0.0754 | 0.0495 | 51.71% | 18.19% |
+| LSTM m3000 tiny e12 | 0.019792 | -0.0066 | -0.1502 | 44.87% | 33.69% |
+
+Prediction spread check:
+
+| Target | e3 predicted std | e12 predicted std | Actual std | e12 predicted / actual std | e3 MAE | e12 MAE |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.000056 | 0.000080 | 0.024237 | 0.0033 | 0.019138 | 0.015153 |
+| acc_std | 0.000089 | 0.000104 | 0.026729 | 0.0039 | 0.019790 | 0.016939 |
+| skill_gap | 0.000114 | 0.000233 | 0.041247 | 0.0056 | 0.034360 | 0.027285 |
+
+Notes:
+
+- Longer tiny-LSTM training materially improved validation MAE and holdout MAE,
+  and all three targets beat both train-mean and difficulty-rating baselines on
+  holdout MAE.
+- This did not solve ranking quality. Holdout mean pairwise order fell from
+  the e3 run's 51.71% to 44.87%, mostly because `mean_acc` and `skill_gap`
+  rank direction are still poor.
+- Prediction spread remains the blocker: even after 12 epochs, predicted
+  standard deviations are only about 0.33%-0.56% of actual target standard
+  deviations. This is still a near-constant predictor with better calibration,
+  not a reliable difficulty-ranker.
+- For Colab/GPU, do not just extend this exact tiny model forever. Use the e12
+  result as evidence that longer sequence training helps MAE, then test a
+  larger LSTM and/or stronger ranking objective once GPU runtime is available.
+
 ### Tabular Forest Core
 
 Command:
@@ -928,6 +1018,7 @@ Notes:
 - `outputs\runs\pilot_top100_summary_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e3\run_report.html`
+- `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
@@ -959,10 +1050,11 @@ but the 5-seed stability check did not confirm it: weighted 100-tree averaged
 0.02492 +/- 0.00113 mean MAE and 58.78% +/- 3.68% pairwise order. Keep the
 weighted 200-tree forest as the current comparison baseline.
 Treat the CPU LSTM runs as pipeline/performance calibration, not final quality
-evidence. The m3000 tiny run improved over the m1200 truncated run and produced
-usable learning curves in under two minutes, but its predictions still collapse
-to a near-constant band, so it needs longer Colab/GPU training before it can be
-compared fairly against the tabular baseline.
+evidence. The m3000 tiny 12-epoch run improved holdout mean MAE to 0.01979 and
+all three targets beat train-mean/difficulty-rating MAE baselines, but holdout
+pairwise order was only 44.87% and predictions still collapse to a near-constant
+band. Longer sequence training helps calibration/MAE, but it does not yet solve
+ranking or spread.
 
 Next training iteration:
 
@@ -979,9 +1071,9 @@ Next training iteration:
 4. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
 5. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
-   and preferably near 7000 if memory allows. Start from the m3000 tiny CPU
-   calibration only as a speed-safe fallback; on GPU, use a larger sequence
-   model and longer training because the CPU tiny run still collapses to
-   near-constant predictions.
+   and preferably near 7000 if memory allows. Start from the m3000 tiny e12 CPU
+   result as a learning-rate/runtime reference, but on GPU use a larger sequence
+   model or ranking-aware tuning because the tiny CPU run still collapses to
+   near-constant predictions and weak holdout ranking.
 6. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

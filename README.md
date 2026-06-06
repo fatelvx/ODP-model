@@ -453,6 +453,10 @@ Google Drive and restore them before resume. The notebook sets
 `CHECKPOINT_METRIC = "val_mean_mae"` by default; change it to
 `"val_mean_pairwise_order_accuracy"` if you want the best checkpoint chosen by
 harder/easier ranking agreement instead of absolute validation error.
+When the real-data cells finish, Colab packages the audit, sweeps, run reports,
+plots, dashboard, decision summary, and `outputs/colab_artifact_manifest.json`
+into `colab_top100_outputs.zip`. The manifest lists included paths and missing
+artifacts so downloaded results are easier to verify later.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.

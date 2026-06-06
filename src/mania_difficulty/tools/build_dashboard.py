@@ -57,6 +57,11 @@ DECISION_COLUMNS = [
     "targets_beating_baseline",
     "targets_beating_difficulty_rating",
     "weakest_target",
+    "calibration_mean_abs_bias",
+    "calibration_worst_bias_target",
+    "calibration_worst_bias",
+    "calibration_mean_pred_std_ratio",
+    "calibration_warning",
     "training_adjustment",
     "next_action",
 ]
@@ -66,6 +71,12 @@ JUDGMENT_FILES = [
     ("cv_oof", "cv_human_pair_judgment_template.csv"),
     ("checkpoint_eval", "eval_human_pair_judgment_template.csv"),
 ]
+
+PREDICTION_SUMMARY_FILES = {
+    "holdout": "prediction_summary.csv",
+    "cv_oof": "cv_prediction_summary.csv",
+    "checkpoint_eval": "eval_prediction_summary.csv",
+}
 
 
 def href(path: Path, out_html: Path) -> str:
@@ -95,6 +106,85 @@ def format_percent(value: Any) -> str:
         return f"{float(value):.2%}"
     except (TypeError, ValueError):
         return str(value)
+
+
+def prediction_calibration_summary(run_dir: Path, evaluation: str) -> dict[str, object]:
+    filename = PREDICTION_SUMMARY_FILES.get(evaluation)
+    if not filename:
+        return {}
+    path = run_dir / filename
+    if not path.exists():
+        return {}
+    try:
+        frame = pd.read_csv(path)
+    except (pd.errors.EmptyDataError, ValueError):
+        return {}
+    if not {"target", "bias"}.issubset(frame.columns):
+        return {}
+
+    frame = frame.copy()
+    frame["bias"] = pd.to_numeric(frame["bias"], errors="coerce")
+    frame = frame.dropna(subset=["bias"])
+    if frame.empty:
+        return {}
+
+    frame["_abs_bias"] = frame["bias"].abs()
+    worst_bias_row = frame.loc[frame["_abs_bias"].idxmax()]
+    summary: dict[str, object] = {
+        "calibration_mean_abs_bias": float(frame["_abs_bias"].mean()),
+        "calibration_worst_bias_target": str(worst_bias_row["target"]),
+        "calibration_worst_bias": float(worst_bias_row["bias"]),
+    }
+
+    if "mae" in frame.columns:
+        frame["mae"] = pd.to_numeric(frame["mae"], errors="coerce")
+        worst_mae = metric_float(worst_bias_row.get("mae"))
+        if worst_mae is not None and worst_mae > 1e-9:
+            summary["calibration_worst_bias_to_mae"] = (
+                abs(float(worst_bias_row["bias"])) / worst_mae
+            )
+
+    if {"actual_std", "pred_std"}.issubset(frame.columns):
+        frame["actual_std"] = pd.to_numeric(frame["actual_std"], errors="coerce")
+        frame["pred_std"] = pd.to_numeric(frame["pred_std"], errors="coerce")
+        spread = frame.dropna(subset=["actual_std", "pred_std"])
+        spread = spread[spread["actual_std"] > 1e-9].copy()
+        if not spread.empty:
+            spread["_pred_std_ratio"] = spread["pred_std"] / spread["actual_std"]
+            summary["calibration_mean_pred_std_ratio"] = float(spread["_pred_std_ratio"].mean())
+            low_spread_row = spread.loc[spread["_pred_std_ratio"].idxmin()]
+            summary["calibration_low_spread_target"] = str(low_spread_row["target"])
+            summary["calibration_low_spread_ratio"] = float(low_spread_row["_pred_std_ratio"])
+
+    warning = calibration_warning_text(summary)
+    if warning:
+        summary["calibration_warning"] = warning
+    return summary
+
+
+def calibration_warning_text(summary: dict[str, object]) -> str:
+    spread_ratio = metric_float(summary.get("calibration_mean_pred_std_ratio"))
+    if spread_ratio is not None and spread_ratio < 0.35:
+        target = str(
+            summary.get("calibration_low_spread_target")
+            or summary.get("calibration_worst_bias_target")
+            or "the weakest target"
+        )
+        return (
+            "Predictions are too compressed toward the mean; inspect "
+            f"{target} features, train longer, or raise model capacity."
+        )
+
+    bias_ratio = metric_float(summary.get("calibration_worst_bias_to_mae"))
+    if bias_ratio is not None and bias_ratio >= 0.75:
+        target = str(summary.get("calibration_worst_bias_target") or "the weakest target")
+        bias = metric_float(summary.get("calibration_worst_bias"))
+        direction = "high" if bias is not None and bias > 0 else "low"
+        return (
+            f"{target} predictions are biased {direction}; check label quality "
+            "and feature coverage before a longer run."
+        )
+    return ""
 
 
 def audit_label_reliability_html(summary: dict[str, Any]) -> str:
@@ -234,6 +324,7 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
             run_info = {}
         evaluation = run_info.get("evaluation", default_evaluation)
         judgment = judgment_by_evaluation.get(str(evaluation), {})
+        calibration = prediction_calibration_summary(run_dir, str(evaluation))
         baseline_target_count = int(summary.get("baseline_target_count", 0))
         difficulty_target_count = int(summary.get("difficulty_baseline_target_count", 0))
         rows.append(
@@ -301,11 +392,23 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
                     else ""
                 ),
                 "weakest_target": summary.get("weakest_target", ""),
+                "calibration_mean_abs_bias": calibration.get("calibration_mean_abs_bias", ""),
+                "calibration_worst_bias_target": calibration.get(
+                    "calibration_worst_bias_target",
+                    "",
+                ),
+                "calibration_worst_bias": calibration.get("calibration_worst_bias", ""),
+                "calibration_mean_pred_std_ratio": calibration.get(
+                    "calibration_mean_pred_std_ratio",
+                    "",
+                ),
+                "calibration_warning": calibration.get("calibration_warning", ""),
                 "training_adjustment": training_adjustment_text(
                     summary,
                     health,
                     performance,
                     run_info,
+                    calibration,
                 ),
                 "next_action": summary.get("next_action", ""),
             }
@@ -340,12 +443,17 @@ def training_adjustment_text(
     health: dict[str, object],
     performance: dict[str, object],
     run_info: dict[str, object],
+    calibration: dict[str, object] | None = None,
 ) -> str:
     notes: list[str] = []
     if str(health.get("overfit_signal", "")).lower() == "possible":
         notes.append(
             "Increase regularization or reduce patience/epochs before a longer run."
         )
+
+    calibration_warning = str((calibration or {}).get("calibration_warning", "")).strip()
+    if calibration_warning:
+        notes.append(calibration_warning)
 
     pairwise = metric_float(verdict.get("mean_pairwise_order_accuracy"))
     if pairwise is not None and pairwise < 0.55:

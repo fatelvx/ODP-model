@@ -15,12 +15,14 @@ import numpy as np
 import pandas as pd
 
 from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
+from mania_difficulty.data.parse_notes import read_osu_metadata
 
 
 MIN_USABLE_ROWS_FOR_REAL_TRAINING = 100
 MIN_FULL_TOP100_RATE = 0.8
 MAX_LOW_SCORE_COUNT_RATE = 0.25
 MAX_SEQUENCE_TRUNCATION_RATE = 0.05
+DIFFICULTY_METADATA_COLUMNS = ("hp_drain_rate", "overall_difficulty", "approach_rate")
 
 
 def numeric_summary(values: list[float]) -> dict[str, float | int]:
@@ -66,6 +68,94 @@ def label_reliability_summary(
         "min_score_count": float(scores.min()),
         "median_score_count": float(scores.median()),
     }
+
+
+def _numeric_column(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series([np.nan] * len(frame), index=frame.index, dtype="float64")
+    return pd.to_numeric(frame[column], errors="coerce")
+
+
+def _metadata_mismatch(label_value: Any, osu_value: Any) -> bool:
+    if label_value in (None, "") or osu_value in (None, ""):
+        return False
+    try:
+        return not bool(np.isclose(float(label_value), float(osu_value), atol=1e-6))
+    except (TypeError, ValueError):
+        return str(label_value) != str(osu_value)
+
+
+def source_integrity_summary(
+    labels: pd.DataFrame,
+    *,
+    expected_mode: int = 3,
+    expected_keys: int = 4,
+    osu_dir: Path | None = None,
+) -> dict[str, Any]:
+    mode = _numeric_column(labels, "mode")
+    key_column = "keys" if "keys" in labels.columns else "circle_size"
+    keys = _numeric_column(labels, key_column)
+    summary: dict[str, Any] = {
+        "checked_rows": int(len(labels)),
+        "expected_mode": int(expected_mode),
+        "expected_keys": int(expected_keys),
+        "mode_column_available": "mode" in labels.columns,
+        "mode_missing_rows": int(mode.isna().sum()),
+        "mode_mismatch_rows": int(((mode.notna()) & (mode != expected_mode)).sum()),
+        "keys_column": key_column if key_column in labels.columns else "",
+        "keys_column_available": key_column in labels.columns,
+        "keys_missing_rows": int(keys.isna().sum()),
+        "keys_mismatch_rows": int(((keys.notna()) & (keys != expected_keys)).sum()),
+    }
+    for column in DIFFICULTY_METADATA_COLUMNS:
+        values = _numeric_column(labels, column)
+        summary[f"{column}_available"] = column in labels.columns
+        summary[f"{column}_missing_rows"] = int(values.isna().sum())
+
+    summary.update(
+        {
+            "osu_dir_checked": osu_dir is not None,
+            "osu_files_checked": 0,
+            "osu_missing_files": 0,
+            "osu_mode_mismatch_rows": 0,
+            "osu_keys_mismatch_rows": 0,
+            "osu_metadata_label_mismatch_rows": 0,
+            "osu_metadata_label_mismatch_examples": [],
+        }
+    )
+    if osu_dir is None:
+        return summary
+
+    examples: list[dict[str, Any]] = []
+    for _, row in labels.iterrows():
+        beatmap_id = str(int(row["beatmap_id"]))
+        osu_path = osu_dir / f"{beatmap_id}.osu"
+        if not osu_path.exists():
+            summary["osu_missing_files"] += 1
+            continue
+        summary["osu_files_checked"] += 1
+        metadata = read_osu_metadata(osu_path)
+        if metadata.get("mode") != expected_mode:
+            summary["osu_mode_mismatch_rows"] += 1
+        if metadata.get("keys") != expected_keys:
+            summary["osu_keys_mismatch_rows"] += 1
+
+        mismatched_columns = [
+            column
+            for column in ("mode", "keys", *DIFFICULTY_METADATA_COLUMNS)
+            if column in labels.columns and _metadata_mismatch(row.get(column), metadata.get(column))
+        ]
+        if mismatched_columns:
+            summary["osu_metadata_label_mismatch_rows"] += 1
+            if len(examples) < 10:
+                examples.append(
+                    {
+                        "beatmap_id": int(row["beatmap_id"]),
+                        "columns": ",".join(mismatched_columns),
+                    }
+                )
+    summary["osu_metadata_label_mismatch_examples"] = examples
+    return summary
 
 
 def sequence_truncation_summary(sequence_lengths: list[int], *, max_notes: int) -> dict[str, Any]:
@@ -173,6 +263,90 @@ def dataset_quality_warnings(summary: dict[str, Any]) -> list[dict[str, str]]:
                 )
             )
 
+    source = summary.get("source_integrity", {})
+    if isinstance(source, dict) and source:
+        if not source.get("mode_column_available"):
+            warnings.append(
+                quality_warning(
+                    "missing_mode_metadata",
+                    "Labels do not include a mode column; cannot prove rows are osu!mania.",
+                    severity="error",
+                )
+            )
+        mode_mismatch_rows = int(source.get("mode_mismatch_rows", 0) or 0)
+        if mode_mismatch_rows:
+            warnings.append(
+                quality_warning(
+                    "non_mania_rows",
+                    f"{mode_mismatch_rows} label rows do not match expected osu!mania mode 3.",
+                    severity="error",
+                )
+            )
+        if not source.get("keys_column_available"):
+            warnings.append(
+                quality_warning(
+                    "missing_key_metadata",
+                    "Labels do not include keys/circle_size; cannot prove the key mode.",
+                    severity="error",
+                )
+            )
+        key_mismatch_rows = int(source.get("keys_mismatch_rows", 0) or 0)
+        if key_mismatch_rows:
+            warnings.append(
+                quality_warning(
+                    "wrong_key_mode_rows",
+                    f"{key_mismatch_rows} label rows do not match expected {source.get('expected_keys')}K mania.",
+                    severity="error",
+                )
+            )
+        missing_difficulty_rows = max(
+            int(source.get(f"{column}_missing_rows", 0) or 0)
+            for column in DIFFICULTY_METADATA_COLUMNS
+        )
+        if missing_difficulty_rows:
+            warnings.append(
+                quality_warning(
+                    "missing_difficulty_metadata",
+                    f"Up to {missing_difficulty_rows} rows are missing HP/OD/AR metadata.",
+                )
+            )
+        if source.get("osu_dir_checked"):
+            osu_missing_files = int(source.get("osu_missing_files", 0) or 0)
+            if osu_missing_files:
+                warnings.append(
+                    quality_warning(
+                        "missing_osu_files",
+                        f"{osu_missing_files} labels do not have a matching raw .osu file for source verification.",
+                    )
+                )
+            osu_mode_mismatch_rows = int(source.get("osu_mode_mismatch_rows", 0) or 0)
+            if osu_mode_mismatch_rows:
+                warnings.append(
+                    quality_warning(
+                        "osu_non_mania_files",
+                        f"{osu_mode_mismatch_rows} raw .osu files do not declare mode 3.",
+                        severity="error",
+                    )
+                )
+            osu_key_mismatch_rows = int(source.get("osu_keys_mismatch_rows", 0) or 0)
+            if osu_key_mismatch_rows:
+                warnings.append(
+                    quality_warning(
+                        "osu_wrong_key_mode_files",
+                        f"{osu_key_mismatch_rows} raw .osu files do not declare {source.get('expected_keys')}K.",
+                        severity="error",
+                    )
+                )
+            label_mismatch_rows = int(source.get("osu_metadata_label_mismatch_rows", 0) or 0)
+            if label_mismatch_rows:
+                warnings.append(
+                    quality_warning(
+                        "osu_label_metadata_mismatch",
+                        f"{label_mismatch_rows} raw .osu files disagree with label metadata.",
+                        severity="error",
+                    )
+                )
+
     return warnings
 
 
@@ -182,6 +356,9 @@ def audit_dataset(
     *,
     target_columns: tuple[str, ...] = DEFAULT_TARGET_COLUMNS,
     max_notes: int = 3000,
+    expected_mode: int = 3,
+    expected_keys: int = 4,
+    osu_dir: Path | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, object]]]:
     labels = pd.read_csv(labels_csv)
     sequences_dir = Path(sequences_dir)
@@ -244,6 +421,12 @@ def audit_dataset(
         "sequence_truncation": sequence_truncation_summary(sequence_lengths, max_notes=max_notes),
         "score_count": score_summary,
         "label_reliability": label_reliability_summary(usable),
+        "source_integrity": source_integrity_summary(
+            labels,
+            expected_mode=expected_mode,
+            expected_keys=expected_keys,
+            osu_dir=osu_dir,
+        ),
         "targets": target_stats,
     }
     summary["quality_warnings"] = dataset_quality_warnings(summary)
@@ -364,6 +547,36 @@ def label_reliability_table(summary: dict[str, Any]) -> str:
     return f"<h2>Label Reliability</h2><table><tbody>{row_html}</tbody></table>"
 
 
+def source_integrity_table(summary: dict[str, Any]) -> str:
+    source = summary.get("source_integrity", {})
+    if not isinstance(source, dict) or not source:
+        return ""
+    rows = [
+        ("Expected Mode", source.get("expected_mode", "")),
+        ("Expected Keys", source.get("expected_keys", "")),
+        ("Mode Column Available", source.get("mode_column_available", "")),
+        ("Mode Missing Rows", source.get("mode_missing_rows", "")),
+        ("Mode Mismatch Rows", source.get("mode_mismatch_rows", "")),
+        ("Keys Column", source.get("keys_column", "")),
+        ("Keys Missing Rows", source.get("keys_missing_rows", "")),
+        ("Keys Mismatch Rows", source.get("keys_mismatch_rows", "")),
+        ("HP Missing Rows", source.get("hp_drain_rate_missing_rows", "")),
+        ("OD Missing Rows", source.get("overall_difficulty_missing_rows", "")),
+        ("AR Missing Rows", source.get("approach_rate_missing_rows", "")),
+        ("Raw .osu Checked", source.get("osu_dir_checked", "")),
+        ("Raw .osu Files Checked", source.get("osu_files_checked", "")),
+        ("Raw .osu Missing Files", source.get("osu_missing_files", "")),
+        ("Raw .osu Mode Mismatch Rows", source.get("osu_mode_mismatch_rows", "")),
+        ("Raw .osu Keys Mismatch Rows", source.get("osu_keys_mismatch_rows", "")),
+        ("Raw .osu / Label Metadata Mismatch Rows", source.get("osu_metadata_label_mismatch_rows", "")),
+    ]
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<h2>Source Integrity</h2><table><tbody>{row_html}</tbody></table>"
+
+
 def sequence_truncation_table(summary: dict[str, Any]) -> str:
     truncation = summary.get("sequence_truncation", {})
     if not isinstance(truncation, dict) or not truncation:
@@ -428,6 +641,7 @@ def write_html_report(summary: dict[str, Any], out_dir: Path) -> None:
   <p>Target columns missing: <code>{html.escape(target_missing)}</code></p>
   {summary_table(summary)}
   {quality_warnings_table(summary)}
+  {source_integrity_table(summary)}
   {sequence_truncation_table(summary)}
   {label_reliability_table(summary)}
   {stats_table("Target Distributions", summary["targets"])}
@@ -456,6 +670,9 @@ def main() -> None:
         default=3000,
         help="Training max-notes value used to estimate sequence truncation risk.",
     )
+    parser.add_argument("--expected-mode", type=int, default=3, help="Expected osu! mode id; mania is 3.")
+    parser.add_argument("--expected-keys", type=int, default=4, help="Expected mania key mode.")
+    parser.add_argument("--osu-dir", type=Path, default=None, help="Optional raw .osu directory to cross-check.")
     args = parser.parse_args()
 
     target_columns = tuple(column.strip() for column in args.targets.split(",") if column.strip())
@@ -464,6 +681,9 @@ def main() -> None:
         args.sequences,
         target_columns=target_columns,
         max_notes=args.max_notes,
+        expected_mode=args.expected_mode,
+        expected_keys=args.expected_keys,
+        osu_dir=args.osu_dir,
     )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "dataset_audit.json").write_text(

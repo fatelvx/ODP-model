@@ -10,22 +10,35 @@ from tqdm import tqdm
 from mania_difficulty.data.osu_api import OsuApiClient
 
 
-def is_ranked_4k_mania(beatmap: dict[str, Any]) -> bool:
+def _numeric_equal(value: Any, expected: int) -> bool:
+    if value is None:
+        return False
+    try:
+        return int(float(value)) == expected
+    except (TypeError, ValueError):
+        return False
+
+
+def is_ranked_mania_keymode(beatmap: dict[str, Any], *, keys: int = 4) -> bool:
     mode = beatmap.get("mode") or beatmap.get("mode_int")
     status = beatmap.get("status") or beatmap.get("ranked")
     circle_size = beatmap.get("cs")
 
     mode_ok = mode == "mania" or mode == 3
     status_ok = status == "ranked" or status == 1
-    keys_ok = circle_size is not None and int(float(circle_size)) == 4
+    keys_ok = _numeric_equal(circle_size, keys)
     return mode_ok and status_ok and keys_ok
 
 
-def flatten_search_page(page: dict[str, Any]) -> list[dict[str, Any]]:
+def is_ranked_4k_mania(beatmap: dict[str, Any]) -> bool:
+    return is_ranked_mania_keymode(beatmap, keys=4)
+
+
+def flatten_search_page(page: dict[str, Any], *, keys: int = 4) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for beatmapset in page.get("beatmapsets", []):
         for beatmap in beatmapset.get("beatmaps", []):
-            if not is_ranked_4k_mania(beatmap):
+            if not is_ranked_mania_keymode(beatmap, keys=keys):
                 continue
             rows.append(
                 {
@@ -40,7 +53,7 @@ def flatten_search_page(page: dict[str, Any]) -> list[dict[str, Any]]:
                     "difficulty_rating": beatmap.get("difficulty_rating", ""),
                     "mode": 3,
                     "circle_size": beatmap.get("cs", ""),
-                    "keys": beatmap.get("cs", ""),
+                    "keys": int(float(beatmap.get("cs", keys))),
                     "hp_drain_rate": beatmap.get("drain", ""),
                     "overall_difficulty": beatmap.get("accuracy", ""),
                     "approach_rate": beatmap.get("ar", ""),
@@ -49,7 +62,12 @@ def flatten_search_page(page: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def fetch_ranked_4k_maps(client: OsuApiClient, target: int) -> list[dict[str, Any]]:
+def fetch_ranked_mania_maps(
+    client: OsuApiClient,
+    target: int,
+    *,
+    keys: int = 4,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen: set[int] = set()
     cursor_string: str | None = None
@@ -59,13 +77,13 @@ def fetch_ranked_4k_maps(client: OsuApiClient, target: int) -> list[dict[str, An
             params = {
                 "m": 3,
                 "s": "ranked",
-                "q": "keys=4",
+                "q": f"keys={keys}",
             }
             if cursor_string:
                 params["cursor_string"] = cursor_string
 
             page = client.get("beatmapsets/search", params=params)
-            page_rows = flatten_search_page(page)
+            page_rows = flatten_search_page(page, keys=keys)
             for row in page_rows:
                 beatmap_id = int(row["beatmap_id"])
                 if beatmap_id in seen:
@@ -82,6 +100,10 @@ def fetch_ranked_4k_maps(client: OsuApiClient, target: int) -> list[dict[str, An
             cursor_string = next_cursor
 
     return rows
+
+
+def fetch_ranked_4k_maps(client: OsuApiClient, target: int) -> list[dict[str, Any]]:
+    return fetch_ranked_mania_maps(client, target, keys=4)
 
 
 def write_csv(rows: list[dict[str, Any]], out: Path) -> None:
@@ -110,14 +132,15 @@ def write_csv(rows: list[dict[str, Any]], out: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch ranked 4K mania map metadata.")
+    parser = argparse.ArgumentParser(description="Fetch ranked mania map metadata for one key mode.")
     parser.add_argument("--target", type=int, default=2000)
+    parser.add_argument("--keys", type=int, default=4, help="Mania key mode to fetch, e.g. 4 or 7.")
     parser.add_argument("--out", type=Path, default=Path("data/raw/beatmaps.csv"))
     parser.add_argument("--sleep", type=float, default=0.25)
     args = parser.parse_args()
 
     client = OsuApiClient.from_client_credentials(sleep_seconds=args.sleep)
-    rows = fetch_ranked_4k_maps(client, args.target)
+    rows = fetch_ranked_mania_maps(client, args.target, keys=args.keys)
     write_csv(rows, args.out)
     print(f"Wrote {len(rows)} maps to {args.out}")
 

@@ -19,6 +19,50 @@ The first target is a leaderboard proxy, not the full playerbase:
 The osu! API only exposes the visible score data we can reasonably fetch, so the
 labels should be read as "top leaderboard performance descriptors".
 
+## Psychometric Player-Feel V1
+
+The newer player-feel path treats difficulty as a human comparison problem, not
+as a top100 accuracy answer. It keeps the old leaderboard proxy pipeline for
+data and sanity checks, then adds:
+
+- `data/player_stages_4k.csv`: fixed 4K player-stage ability vectors
+- `data/annotations/player_feel_pairs.csv`: fillable pairwise judgment template
+- `player_feel_curve`: per-map/segment pressure curves and skill summaries
+- `generate_player_feel_pairs`: whole-map and segment candidates for judgment
+- `train_feel_ranker`: confidence-weighted pairwise ranking trainer
+
+This format is built for imperfect human coverage. If a comparison is outside
+the rater's reliable range, put `uncertain`, `out_of_range`, `skip`, or `tie` in
+`harder_choice`; the row stays documented but is ignored for training.
+
+Generate real 4K pilot curves and pairs to label:
+
+```powershell
+python -m mania_difficulty.tools.player_feel_curve `
+  --labels data/processed/labels_pilot_top100_metadata.csv `
+  --sequences data/processed/sequences_pilot `
+  --out-dir outputs/player_feel_v1_pilot_real/curves
+
+python -m mania_difficulty.tools.generate_player_feel_pairs `
+  --labels data/processed/labels_pilot_top100_metadata.csv `
+  --sequences data/processed/sequences_pilot `
+  --player-stages data/player_stages_4k.csv `
+  --out outputs/player_feel_v1_pilot_real/player_feel_pairs_to_label.csv `
+  --max-pairs 80 `
+  --stage-ids beginner,intermediate,advanced,dan_ready
+```
+
+After filling judgments:
+
+```powershell
+python -m mania_difficulty.tools.train_feel_ranker `
+  --judgments outputs/player_feel_v1_pilot_real/player_feel_pairs_to_label.csv `
+  --summary outputs/player_feel_v1_pilot_real/curves/player_feel_summary.csv `
+  --curves outputs/player_feel_v1_pilot_real/curves/player_feel_curve.csv `
+  --player-stages data/player_stages_4k.csv `
+  --out-dir outputs/player_feel_v1_pilot_real/ranker
+```
+
 ## Quick Smoke Test Without osu! API
 
 Local setup uses Python 3.12 in this repo because the default Python on this
@@ -175,7 +219,7 @@ $env:OSU_CLIENT_SECRET="your_client_secret"
 Fetch ranked 4K mania map metadata:
 
 ```powershell
-python -m mania_difficulty.data.fetch_maps --target 2000 --out data/raw/beatmaps.csv
+python -m mania_difficulty.data.fetch_maps --keys 4 --target 2000 --out data/raw/beatmaps.csv
 ```
 
 Download `.osu` files through the configured mirror:
@@ -211,6 +255,8 @@ python -m mania_difficulty.tools.audit_dataset `
   --labels data/processed/labels.csv `
   --sequences data/processed/sequences `
   --max-notes 3000 `
+  --expected-keys 4 `
+  --osu-dir data/raw/osu `
   --out-dir outputs/dataset_audit_top100
 ```
 

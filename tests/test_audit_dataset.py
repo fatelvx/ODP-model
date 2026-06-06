@@ -119,6 +119,109 @@ class AuditDatasetTests(unittest.TestCase):
         self.assertIn("Sequence Truncation", html)
         self.assertIn("Truncated Rate", html)
 
+    def test_audit_dataset_reports_source_integrity_for_mania_keymode_and_osu_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            labels_csv = tmp_path / "labels.csv"
+            sequences_dir = tmp_path / "sequences"
+            osu_dir = tmp_path / "osu"
+            sequences_dir.mkdir()
+            osu_dir.mkdir()
+            pd.DataFrame(
+                [
+                    {
+                        "beatmap_id": 1,
+                        "beatmapset_id": 10,
+                        "mean_acc": 0.90,
+                        "acc_std": 0.02,
+                        "skill_gap": 0.05,
+                        "score_count": 100,
+                        "mode": 3,
+                        "keys": 4,
+                        "hp_drain_rate": 7,
+                        "overall_difficulty": 8,
+                        "approach_rate": 5,
+                    },
+                    {
+                        "beatmap_id": 2,
+                        "beatmapset_id": 11,
+                        "mean_acc": 0.80,
+                        "acc_std": 0.03,
+                        "skill_gap": 0.07,
+                        "score_count": 100,
+                        "mode": 3,
+                        "keys": 7,
+                        "hp_drain_rate": 7,
+                        "overall_difficulty": 8,
+                        "approach_rate": 5,
+                    },
+                    {
+                        "beatmap_id": 3,
+                        "beatmapset_id": 12,
+                        "mean_acc": 0.70,
+                        "acc_std": 0.04,
+                        "skill_gap": 0.09,
+                        "score_count": 100,
+                        "mode": 0,
+                        "keys": 4,
+                        "hp_drain_rate": "",
+                        "overall_difficulty": 8,
+                        "approach_rate": 5,
+                    },
+                ]
+            ).to_csv(labels_csv, index=False)
+            for beatmap_id in [1, 2, 3]:
+                np.save(sequences_dir / f"{beatmap_id}.npy", np.zeros((5, 6), dtype=np.float32))
+            (osu_dir / "1.osu").write_text(
+                """
+[General]
+Mode: 3
+
+[Difficulty]
+CircleSize:4
+HPDrainRate:7
+OverallDifficulty:8
+ApproachRate:5
+""",
+                encoding="utf-8",
+            )
+            (osu_dir / "2.osu").write_text(
+                """
+[General]
+Mode: 3
+
+[Difficulty]
+CircleSize:7
+HPDrainRate:7
+OverallDifficulty:8
+ApproachRate:5
+""",
+                encoding="utf-8",
+            )
+
+            summary, _ = audit_dataset(
+                labels_csv,
+                sequences_dir,
+                max_notes=6,
+                expected_keys=4,
+                osu_dir=osu_dir,
+            )
+
+        integrity = summary["source_integrity"]
+        self.assertEqual(integrity["expected_mode"], 3)
+        self.assertEqual(integrity["expected_keys"], 4)
+        self.assertEqual(integrity["mode_mismatch_rows"], 1)
+        self.assertEqual(integrity["keys_mismatch_rows"], 1)
+        self.assertEqual(integrity["hp_drain_rate_missing_rows"], 1)
+        self.assertEqual(integrity["osu_files_checked"], 2)
+        self.assertEqual(integrity["osu_missing_files"], 1)
+        self.assertEqual(integrity["osu_keys_mismatch_rows"], 1)
+        warning_codes = {warning["code"] for warning in summary["quality_warnings"]}
+        self.assertIn("non_mania_rows", warning_codes)
+        self.assertIn("wrong_key_mode_rows", warning_codes)
+        self.assertIn("missing_difficulty_metadata", warning_codes)
+        self.assertIn("missing_osu_files", warning_codes)
+
 
 if __name__ == "__main__":
     unittest.main()

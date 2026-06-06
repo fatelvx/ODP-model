@@ -13,6 +13,11 @@ import pandas as pd
 
 from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
 from mania_difficulty.train import train
+from mania_difficulty.tools.sweep_selection import (
+    parse_selection_metric,
+    selection_sort_ascending,
+    selection_sort_value,
+)
 
 
 def parse_int_list(value: str) -> list[int]:
@@ -122,13 +127,17 @@ def neural_grid(
     return candidates
 
 
-def choose_best_candidate(summary_rows: list[dict[str, Any]]) -> dict[str, Any]:
+def choose_best_candidate(
+    summary_rows: list[dict[str, Any]],
+    *,
+    selection_metric: str = "mean_mae",
+) -> dict[str, Any]:
     if not summary_rows:
         raise ValueError("No candidate rows to choose from.")
     return sorted(
         summary_rows,
         key=lambda row: (
-            float(row["mean_mae"]),
+            selection_sort_value(row, selection_metric),
             int(row.get("model_size_score", 0)),
             float(row.get("best_val_loss", float("inf"))),
             str(row.get("candidate_id", "")),
@@ -235,8 +244,17 @@ def evaluate_candidate(
     return summarize_run(candidate, metrics, run_dir)
 
 
-def write_html_report(summary_rows: list[dict[str, Any]], best: dict[str, Any], out_html: Path) -> None:
-    frame = pd.DataFrame(summary_rows).sort_values(["mean_mae", "model_size_score"])
+def write_html_report(
+    summary_rows: list[dict[str, Any]],
+    best: dict[str, Any],
+    out_html: Path,
+    *,
+    selection_metric: str = "mean_mae",
+) -> None:
+    frame = pd.DataFrame(summary_rows).sort_values(
+        [selection_metric, "model_size_score"],
+        ascending=[selection_sort_ascending(selection_metric), True],
+    )
     table = frame.to_html(index=False, float_format=lambda value: f"{value:.6f}")
     report = f"""<!doctype html>
 <html lang="en">
@@ -254,7 +272,7 @@ def write_html_report(summary_rows: list[dict[str, Any]], best: dict[str, Any], 
 <body>
   <h1>Neural Parameter Sweep</h1>
   <p>Best candidate: <code>{html.escape(str(best["candidate_id"]))}</code></p>
-  <p>Each row is one holdout train run. Lower mean MAE is better. Positive mean improvement means the model beats the train-mean baseline.</p>
+  <p>Selection metric: <code>{html.escape(selection_metric)}</code>. Lower MAE/loss is better; higher R2, Spearman, pairwise order, and improvement are better.</p>
   {table}
 </body>
 </html>
@@ -288,6 +306,7 @@ def main() -> None:
     parser.add_argument("--lstm-layers", type=parse_int_list, default=[1, 2])
     parser.add_argument("--lstm-dropouts", type=parse_float_list, default=[0.1, 0.2])
     parser.add_argument("--lstm-head-dropouts", type=parse_float_list, default=[0.2, 0.3])
+    parser.add_argument("--selection-metric", type=parse_selection_metric, default="mean_mae")
     parser.add_argument(
         "--max-candidates",
         type=int,
@@ -323,17 +342,20 @@ def main() -> None:
         summary_rows.append(summary)
         detail_rows.extend(details)
 
-    best = choose_best_candidate(summary_rows)
+    best = choose_best_candidate(summary_rows, selection_metric=args.selection_metric)
     best_params = {
         **best,
-        "selection_metric": "mean_mae",
+        "selection_metric": args.selection_metric,
         "evaluation": "holdout",
         "candidate_count": len(candidates),
     }
 
     summary_csv = args.out_dir / "neural_sweep_summary.csv"
     detail_csv = args.out_dir / "neural_sweep_details.csv"
-    pd.DataFrame(summary_rows).sort_values(["mean_mae", "model_size_score"]).to_csv(
+    pd.DataFrame(summary_rows).sort_values(
+        [args.selection_metric, "model_size_score"],
+        ascending=[selection_sort_ascending(args.selection_metric), True],
+    ).to_csv(
         summary_csv,
         index=False,
         encoding="utf-8",
@@ -347,7 +369,12 @@ def main() -> None:
         json.dumps(vars(args), indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    write_html_report(summary_rows, best, args.out_dir / "neural_sweep_report.html")
+    write_html_report(
+        summary_rows,
+        best,
+        args.out_dir / "neural_sweep_report.html",
+        selection_metric=args.selection_metric,
+    )
     print(json.dumps(best_params, indent=2, ensure_ascii=False))
     print(f"Wrote {summary_csv}, {detail_csv}, and {args.out_dir / 'neural_sweep_report.html'}")
 

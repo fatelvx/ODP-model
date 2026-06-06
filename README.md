@@ -82,7 +82,8 @@ python -m mania_difficulty.tools.sweep_forest `
   --trees 200,500 `
   --min-samples-leaf 1,2,4 `
   --max-features sqrt,0.75 `
-  --feature-sets core,burst
+  --feature-sets core,burst `
+  --selection-metric mean_pairwise_order_accuracy
 ```
 
 The sweep writes `sweep_summary.csv`, `sweep_details.csv`,
@@ -192,7 +193,8 @@ python -m mania_difficulty.tools.sweep_forest `
   --trees 200,500 `
   --min-samples-leaf 1,2,4 `
   --max-features sqrt,0.75 `
-  --feature-sets core,burst
+  --feature-sets core,burst `
+  --selection-metric mean_pairwise_order_accuracy
 ```
 
 Train the sequence model:
@@ -246,15 +248,16 @@ python -m mania_difficulty.tools.sweep_neural `
   --lstm-layers 1,2 `
   --lstm-dropouts 0.1,0.2 `
   --lstm-head-dropouts 0.2 `
+  --selection-metric mean_pairwise_order_accuracy `
   --max-candidates 4 `
   --device cuda
 ```
 
 The neural sweep writes `neural_sweep_summary.csv`,
 `neural_sweep_details.csv`, `best_params.json`, and
-`neural_sweep_report.html`. It selects by holdout mean MAE, so use it for quick
-architecture direction, then confirm promising runs with more data and human
-review.
+`neural_sweep_report.html`. Use `--selection-metric mean_mae` for absolute
+prediction error, or `--selection-metric mean_pairwise_order_accuracy` when the
+priority is choosing the same harder/easier direction a human would compare.
 
 Compare runs:
 

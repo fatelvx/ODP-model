@@ -36,6 +36,26 @@ class SweepNeuralTests(unittest.TestCase):
 
         self.assertEqual(best["candidate_id"], "small")
 
+    def test_choose_best_candidate_can_optimize_pairwise_order_accuracy(self):
+        rows = [
+            {
+                "candidate_id": "low_mae",
+                "mean_mae": 0.05,
+                "mean_pairwise_order_accuracy": 0.55,
+                "model_size_score": 50,
+            },
+            {
+                "candidate_id": "better_order",
+                "mean_mae": 0.08,
+                "mean_pairwise_order_accuracy": 0.9,
+                "model_size_score": 80,
+            },
+        ]
+
+        best = choose_best_candidate(rows, selection_metric="mean_pairwise_order_accuracy")
+
+        self.assertEqual(best["candidate_id"], "better_order")
+
 
 if __name__ == "__main__":
     unittest.main()

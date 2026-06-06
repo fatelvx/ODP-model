@@ -27,6 +27,28 @@ class SweepForestTests(unittest.TestCase):
 
         self.assertEqual(best["candidate_id"], "small")
 
+    def test_choose_best_candidate_can_optimize_pairwise_order_accuracy(self):
+        rows = [
+            {
+                "candidate_id": "low_mae",
+                "mean_mae": 0.05,
+                "mean_pairwise_order_accuracy": 0.6,
+                "forest_trees": 50,
+                "forest_min_samples_leaf": 2,
+            },
+            {
+                "candidate_id": "better_order",
+                "mean_mae": 0.08,
+                "mean_pairwise_order_accuracy": 0.9,
+                "forest_trees": 100,
+                "forest_min_samples_leaf": 2,
+            },
+        ]
+
+        best = choose_best_candidate(rows, selection_metric="mean_pairwise_order_accuracy")
+
+        self.assertEqual(best["candidate_id"], "better_order")
+
 
 if __name__ == "__main__":
     unittest.main()

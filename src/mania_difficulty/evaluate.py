@@ -18,8 +18,10 @@ from mania_difficulty.train import (
     dataloader_options,
     evaluate_loader,
     mixed_precision_enabled,
+    ranking_target_column,
     write_human_review,
     write_pairwise_review,
+    write_prediction_rankings,
     write_predictions,
 )
 from mania_difficulty.visualize import plot_prediction_scatter, write_run_report
@@ -79,6 +81,12 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     predictions_csv = out_dir / "eval_predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+    write_prediction_rankings(
+        out_dir / "eval_prediction_rankings.csv",
+        args.labels,
+        predictions_csv,
+        target_column=ranking_target_column(target_columns),
+    )
     write_human_review(out_dir / "eval_human_review.csv", args.labels, predictions_csv, target_columns)
     write_pairwise_review(out_dir / "eval_human_pair_review.csv", args.labels, predictions_csv)
     write_pair_judgment_template(

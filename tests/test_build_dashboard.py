@@ -20,6 +20,10 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "last_checkpoint.pt").write_bytes(b"checkpoint")
             (run_dir / "learning_curve.png").write_bytes(b"png")
             (run_dir / "prediction_scatter.png").write_bytes(b"png")
+            (run_dir / "prediction_rankings.csv").write_text(
+                "ranking_section,rank,beatmap_id\npredicted_hardest,1,1\n",
+                encoding="utf-8",
+            )
             (run_dir / "embedding_projection.png").write_bytes(b"png")
             (run_dir / "embedding_report.html").write_text("<html>embeddings</html>", encoding="utf-8")
             (run_dir / "embedding_projection.csv").write_text(
@@ -94,6 +98,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("run_a", html)
         self.assertIn("run_report.html", html)
         self.assertIn("last_checkpoint.pt", html)
+        self.assertIn("prediction rankings", html)
+        self.assertIn("prediction_rankings.csv", html)
         self.assertIn("learning_curve.png", html)
         self.assertIn("embedding_report.html", html)
         self.assertIn("embedding_projection.png", html)

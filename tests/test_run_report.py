@@ -29,6 +29,17 @@ class RunReportTests(unittest.TestCase):
             pd.DataFrame(
                 [
                     {
+                        "ranking_section": "predicted_hardest",
+                        "rank": 1,
+                        "beatmap_id": 1,
+                        "title": "hard map",
+                        "pred_mean_acc": 0.75,
+                    }
+                ]
+            ).to_csv(run_dir / "prediction_rankings.csv", index=False)
+            pd.DataFrame(
+                [
+                    {
                         "epoch": 1,
                         "train_loss": 0.5,
                         "val_loss": 0.4,
@@ -94,6 +105,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("embedding_report.html", report)
         self.assertIn("Transformer Attention Map", report)
         self.assertIn("attention_report.html", report)
+        self.assertIn("Prediction Rankings", report)
+        self.assertIn("predicted_hardest", report)
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
         self.assertIn("Grad Accum Steps", report)

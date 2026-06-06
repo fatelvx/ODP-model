@@ -326,6 +326,11 @@ def csv_preview_html(path: Path, title: str, description: str, *, max_rows: int 
 def review_sections_html(run_dir: Path) -> str:
     sections = [
         csv_preview_html(
+            run_dir / "prediction_rankings.csv",
+            "Prediction Rankings",
+            "Model outputs sorted into predicted hardest, predicted easiest, and largest-error maps for quick inspection.",
+        ),
+        csv_preview_html(
             run_dir / "human_review.csv",
             "Human Review",
             "Maps that are useful to inspect by hand: lowest predicted accuracy, lowest observed accuracy, and largest disagreement.",
@@ -351,6 +356,11 @@ def review_sections_html(run_dir: Path) -> str:
             "Out-of-fold maps worth checking by hand.",
         ),
         csv_preview_html(
+            run_dir / "cv_prediction_rankings.csv",
+            "Cross-Validation Prediction Rankings",
+            "Out-of-fold model outputs sorted into hardest, easiest, and largest-error maps.",
+        ),
+        csv_preview_html(
             run_dir / "cv_human_pair_review.csv",
             "Cross-Validation Pairwise Human Review",
             "Out-of-fold map pairs where the model and proxy rank difficulty in opposite directions.",
@@ -369,6 +379,11 @@ def review_sections_html(run_dir: Path) -> str:
             run_dir / "eval_human_review.csv",
             "Evaluation Human Review",
             "Maps worth checking by hand for this checkpoint evaluation.",
+        ),
+        csv_preview_html(
+            run_dir / "eval_prediction_rankings.csv",
+            "Evaluation Prediction Rankings",
+            "Checkpoint model outputs sorted into hardest, easiest, and largest-error maps.",
         ),
         csv_preview_html(
             run_dir / "eval_human_pair_review.csv",
@@ -530,6 +545,7 @@ def write_run_report(
   {review_html}
   <h2>Files</h2>
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
+  <p>Open <code>prediction_rankings.csv</code> to inspect predicted hardest, easiest, and largest-error maps.</p>
   <p>Open <code>human_review.csv</code> for maps that need human judgment.</p>
   <p>Open <code>human_pair_review.csv</code> to compare map pairs where the ranking disagrees.</p>
   <p>Fill <code>human_pair_judgment_template.csv</code>, then score it with <code>python -m mania_difficulty.tools.human_judgments score</code>.</p>

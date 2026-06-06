@@ -106,6 +106,7 @@ Each run saves:
 - `learning_curve.png`: growth curve
 - `run_report.html`: includes Model Verdict, Training Health, and Training Performance tables for quick quality, loss, speed, LR, and memory checks
 - `predictions.csv`: actual model outputs on the test split
+- `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently
 - `human_pair_judgment_template.csv`: fillable CSV for scoring model/proxy agreement with human judgment
@@ -118,6 +119,7 @@ Each run saves:
 - `cv_human_pair_judgment_template.csv`: fillable out-of-fold human judgment CSV
 - `cv_error_slices.csv`: cross-validation error slices when `--cv-folds` is enabled
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
+- `cv_prediction_rankings.csv`: cross-validation predicted hardest, easiest, and largest-error maps
 - `metrics.json`: MAE and R2 per target
 - `best_model.pt`: checkpoint for prediction
 - `last_checkpoint.pt`: neural training state for `--resume`

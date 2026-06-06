@@ -55,6 +55,9 @@ CHECKPOINT_BACKUP_FILENAMES = [
     "run_report.html",
     "learning_curve.png",
     "prediction_scatter.png",
+    "prediction_rankings.csv",
+    "cv_prediction_rankings.csv",
+    "eval_prediction_rankings.csv",
     "predictions.csv",
     "config.json",
 ]
@@ -427,6 +430,72 @@ def write_predictions(
         writer.writerows(rows)
 
 
+def write_prediction_rankings(
+    path: Path,
+    labels_csv: Path,
+    predictions_csv: Path,
+    *,
+    target_column: str = "mean_acc",
+    top_n: int = 20,
+) -> None:
+    actual_column = f"actual_{target_column}"
+    pred_column = f"pred_{target_column}"
+    error_column = f"error_{target_column}"
+    abs_error_column = f"abs_error_{target_column}"
+    fieldnames = [
+        "ranking_section",
+        "rank",
+        "beatmap_id",
+        "title",
+        "artist",
+        "mapper",
+        "version",
+        pred_column,
+        actual_column,
+        error_column,
+        abs_error_column,
+    ]
+    predictions = pd.read_csv(predictions_csv)
+    if pred_column not in predictions.columns or actual_column not in predictions.columns:
+        pd.DataFrame(columns=fieldnames).to_csv(path, index=False, encoding="utf-8")
+        return
+
+    labels = pd.read_csv(labels_csv)
+    merged = predictions.merge(labels, on="beatmap_id", how="left", suffixes=("", "_label"))
+    if error_column not in merged.columns:
+        merged[error_column] = merged[pred_column] - merged[actual_column]
+    merged[abs_error_column] = merged[error_column].abs()
+
+    rows = []
+
+    def append_section(section: str, frame: pd.DataFrame) -> None:
+        for rank, (_, row) in enumerate(frame.head(top_n).iterrows(), start=1):
+            rows.append(
+                {
+                    "ranking_section": section,
+                    "rank": rank,
+                    "beatmap_id": int(row["beatmap_id"]),
+                    "title": clean_review_value(row.get("title", "")),
+                    "artist": clean_review_value(row.get("artist", "")),
+                    "mapper": clean_review_value(row.get("mapper", "")),
+                    "version": clean_review_value(row.get("version", "")),
+                    pred_column: float(row[pred_column]),
+                    actual_column: float(row[actual_column]),
+                    error_column: float(row[error_column]),
+                    abs_error_column: float(row[abs_error_column]),
+                }
+            )
+
+    append_section("predicted_hardest", merged.sort_values(pred_column, ascending=True))
+    append_section("predicted_easiest", merged.sort_values(pred_column, ascending=False))
+    append_section("largest_abs_error", merged.sort_values(abs_error_column, ascending=False))
+    pd.DataFrame(rows, columns=fieldnames).to_csv(path, index=False, encoding="utf-8")
+
+
+def ranking_target_column(target_columns: list[str]) -> str:
+    return "mean_acc" if "mean_acc" in target_columns else target_columns[0]
+
+
 def repeat_baseline(targets: np.ndarray, baseline_values: np.ndarray) -> np.ndarray:
     return np.repeat(baseline_values.reshape(1, -1), len(targets), axis=0).astype("float32")
 
@@ -708,6 +777,13 @@ def write_tabular_cross_validation(
 
     cv_predictions_csv = run_dir / "cv_predictions.csv"
     write_predictions(cv_predictions_csv, beatmap_ids, y_all, oof_pred, target_columns)
+    write_prediction_rankings(
+        run_dir / "cv_prediction_rankings.csv",
+        args.labels,
+        cv_predictions_csv,
+        target_column=ranking_target_column(target_columns),
+        top_n=30,
+    )
     write_human_review(
         run_dir / "cv_human_review.csv",
         args.labels,
@@ -810,6 +886,12 @@ def train_tabular_forest(
 
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, y_test, test_pred, target_columns)
+    write_prediction_rankings(
+        run_dir / "prediction_rankings.csv",
+        args.labels,
+        predictions_csv,
+        target_column=ranking_target_column(target_columns),
+    )
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
     write_pairwise_review(run_dir / "human_pair_review.csv", args.labels, predictions_csv)
     write_pair_judgment_template(
@@ -1099,6 +1181,12 @@ def train(args: argparse.Namespace) -> Path:
     )
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+    write_prediction_rankings(
+        run_dir / "prediction_rankings.csv",
+        args.labels,
+        predictions_csv,
+        target_column=ranking_target_column(target_columns),
+    )
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
     write_pairwise_review(run_dir / "human_pair_review.csv", args.labels, predictions_csv)
     write_pair_judgment_template(

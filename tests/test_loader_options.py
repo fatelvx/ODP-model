@@ -1,11 +1,14 @@
 import argparse
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 import torch
 
 from mania_difficulty.train import (
     dataloader_options,
+    git_environment_metadata,
     gradient_accumulation_steps,
     gradient_clip_norm,
     latest_checkpoint_path,
@@ -93,6 +96,19 @@ class LoaderOptionTests(unittest.TestCase):
         self.assertEqual(metadata["torch_version"], torch.__version__)
         self.assertEqual(metadata["cuda_available"], torch.cuda.is_available())
         self.assertIn("cuda_device_count", metadata)
+        self.assertIn("git_commit", metadata)
+        self.assertIn("git_branch", metadata)
+        self.assertIn("git_dirty", metadata)
+        self.assertIn("git_status_entries", metadata)
+
+    def test_git_environment_metadata_handles_non_git_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metadata = git_environment_metadata(Path(tmp))
+
+        self.assertEqual(metadata["git_commit"], "")
+        self.assertEqual(metadata["git_branch"], "")
+        self.assertEqual(metadata["git_dirty"], "")
+        self.assertEqual(metadata["git_status_entries"], "")
 
 
 if __name__ == "__main__":

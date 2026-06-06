@@ -145,6 +145,10 @@ class RunReportTests(unittest.TestCase):
                             "cuda_available": True,
                             "cuda_device_name": "NVIDIA T4",
                             "cuda_device_count": 1,
+                            "git_commit": "abc1234",
+                            "git_branch": "main",
+                            "git_dirty": False,
+                            "git_status_entries": 0,
                             "amp": "auto",
                             "amp_enabled": False,
                             "batch_size": 8,
@@ -204,6 +208,11 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("CUDA Device", report)
         self.assertIn("NVIDIA T4", report)
         self.assertIn("CUDA Device Count", report)
+        self.assertIn("Git Commit", report)
+        self.assertIn("abc1234", report)
+        self.assertIn("Git Branch", report)
+        self.assertIn("main", report)
+        self.assertIn("Git Dirty", report)
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
         self.assertIn("Grad Accum Steps", report)

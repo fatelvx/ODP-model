@@ -263,6 +263,9 @@ priority is ranking map pairs in the same harder/easier direction.
 Neural runs clip gradient norm at `--grad-clip-norm 1.0` by default to reduce
 unstable updates on small/noisy top100 labels; set it to `0` to disable clipping
 or lower it if training spikes.
+Each run records the current git commit, branch, and dirty state in
+`metrics.json`, `run_report.html`, and dashboard decision summaries so Colab
+artifacts can be traced back to the code version that produced them.
 
 For neural runs on top100 labels, `--sample-weight-column score_count`
 downweights maps with fewer visible scores. With the defaults above, 100 scores

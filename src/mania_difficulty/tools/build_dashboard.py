@@ -30,6 +30,7 @@ DECISION_COLUMNS = [
     "device",
     "amp_enabled",
     "effective_batch_size",
+    "grad_clip_norm",
     "sample_weight_column",
     "sample_weight_train_mean",
     "sample_weight_train_downweighted_rate",
@@ -243,6 +244,7 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
                 "device": run_info.get("device", ""),
                 "amp_enabled": run_info.get("amp_enabled", ""),
                 "effective_batch_size": run_info.get("effective_batch_size", ""),
+                "grad_clip_norm": run_info.get("grad_clip_norm", ""),
                 "sample_weight_column": run_info.get("sample_weight_column", ""),
                 "sample_weight_train_mean": run_info.get("sample_weight_train_mean", ""),
                 "sample_weight_train_downweighted_rate": run_info.get(

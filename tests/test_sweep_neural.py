@@ -2,7 +2,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from mania_difficulty.tools.sweep_neural import candidate_train_args, choose_best_candidate, neural_grid
+from mania_difficulty.tools.sweep_neural import (
+    candidate_train_args,
+    choose_best_candidate,
+    neural_grid,
+    summarize_run,
+)
 
 
 class SweepNeuralTests(unittest.TestCase):
@@ -64,6 +69,29 @@ class SweepNeuralTests(unittest.TestCase):
 
         self.assertEqual(best["candidate_id"], "better_order")
 
+    def test_summarize_run_includes_gradient_clip_norm(self):
+        summary, _ = summarize_run(
+            {"candidate_id": "lstm", "model": "lstm"},
+            {
+                "mean_acc": {
+                    "mae": 0.1,
+                    "r2": 0.2,
+                    "spearman": 0.3,
+                    "pairwise_order_accuracy": 0.75,
+                    "baseline_mae": 0.2,
+                    "mae_improvement_pct": 0.5,
+                },
+                "_run": {
+                    "grad_accum_steps": 2,
+                    "grad_clip_norm": 0.75,
+                    "effective_batch_size": 32,
+                },
+            },
+            Path("outputs/runs/lstm"),
+        )
+
+        self.assertEqual(summary["grad_clip_norm"], 0.75)
+
     def test_candidate_train_args_passes_loader_options(self):
         base_args = SimpleNamespace(
             labels=Path("labels.csv"),
@@ -86,6 +114,7 @@ class SweepNeuralTests(unittest.TestCase):
             loader_prefetch_factor=3,
             amp="auto",
             grad_accum_steps=2,
+            grad_clip_norm=0.75,
             checkpoint_metric="val_mean_mae",
             checkpoint_backup_dir=Path("drive/checkpoints"),
             lstm_embed_dims=[32],
@@ -119,6 +148,7 @@ class SweepNeuralTests(unittest.TestCase):
         self.assertEqual(train_args.loader_prefetch_factor, 3)
         self.assertEqual(train_args.amp, "auto")
         self.assertEqual(train_args.grad_accum_steps, 2)
+        self.assertEqual(train_args.grad_clip_norm, 0.75)
         self.assertEqual(train_args.checkpoint_metric, "val_mean_mae")
         self.assertEqual(train_args.checkpoint_backup_dir, Path("drive/checkpoints"))
         self.assertEqual(train_args.sample_weight_column, "score_count")

@@ -133,6 +133,7 @@ class RunReportTests(unittest.TestCase):
                             "amp_enabled": False,
                             "batch_size": 8,
                             "grad_accum_steps": 2,
+                            "grad_clip_norm": 0.75,
                             "effective_batch_size": 16,
                             "sample_weight_column": "score_count",
                             "sample_weight_min": 0.25,
@@ -186,6 +187,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
         self.assertIn("Grad Accum Steps", report)
+        self.assertIn("Grad Clip Norm", report)
+        self.assertIn("0.75", report)
         self.assertIn("Effective Batch Size", report)
         self.assertIn("16", report)
         self.assertIn("Sample Weight Column", report)

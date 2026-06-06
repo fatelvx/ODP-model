@@ -7,6 +7,7 @@ import torch
 from mania_difficulty.train import (
     dataloader_options,
     gradient_accumulation_steps,
+    gradient_clip_norm,
     latest_checkpoint_path,
     mixed_precision_enabled,
     positive_int,
@@ -61,6 +62,11 @@ class LoaderOptionTests(unittest.TestCase):
         args = SimpleNamespace(grad_accum_steps=4)
 
         self.assertEqual(gradient_accumulation_steps(args), 4)
+
+    def test_gradient_clip_norm_defaults_to_one_and_can_be_disabled(self):
+        self.assertEqual(gradient_clip_norm(SimpleNamespace()), 1.0)
+        self.assertIsNone(gradient_clip_norm(SimpleNamespace(grad_clip_norm=0)))
+        self.assertEqual(gradient_clip_norm(SimpleNamespace(grad_clip_norm=0.5)), 0.5)
 
     def test_positive_int_rejects_zero_and_negative_values(self):
         self.assertEqual(positive_int("3"), 3)

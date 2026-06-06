@@ -713,6 +713,7 @@ def write_run_report(
                 f"<tr><th>AMP Enabled</th><td>{html.escape(str(run_info.get('amp_enabled', '')))}</td></tr>"
                 f"<tr><th>Batch Size</th><td>{html.escape(str(run_info.get('batch_size', '')))}</td></tr>"
                 f"<tr><th>Grad Accum Steps</th><td>{html.escape(str(run_info.get('grad_accum_steps', '')))}</td></tr>"
+                f"<tr><th>Grad Clip Norm</th><td>{html.escape(str(run_info.get('grad_clip_norm', '')))}</td></tr>"
                 f"<tr><th>Effective Batch Size</th><td>{html.escape(str(run_info.get('effective_batch_size', '')))}</td></tr>"
                 f"<tr><th>Sample Weight Column</th><td>{html.escape(str(run_info.get('sample_weight_column', '')))}</td></tr>"
                 f"<tr><th>Sample Weight Min</th><td>{html.escape(str(run_info.get('sample_weight_min', '')))}</td></tr>"

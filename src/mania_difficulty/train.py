@@ -227,6 +227,13 @@ def gradient_accumulation_steps(args: argparse.Namespace) -> int:
     return max(1, int(getattr(args, "grad_accum_steps", 1)))
 
 
+def gradient_clip_norm(args: argparse.Namespace) -> float | None:
+    value = float(getattr(args, "grad_clip_norm", 1.0))
+    if value <= 0:
+        return None
+    return value
+
+
 def latest_checkpoint_path(run_dir: Path | str) -> Path:
     return Path(run_dir) / "last_checkpoint.pt"
 
@@ -1193,6 +1200,7 @@ def train(args: argparse.Namespace) -> Path:
     loader_kwargs = dataloader_options(args, device)
     amp_active = mixed_precision_enabled(args, device)
     grad_accum_steps = gradient_accumulation_steps(args)
+    grad_clip = gradient_clip_norm(args)
     effective_batch_size = args.batch_size * grad_accum_steps
 
     collate = partial(collate_batch, max_notes=args.max_notes)
@@ -1333,7 +1341,8 @@ def train(args: argparse.Namespace) -> Path:
             should_step = batch_index % grad_accum_steps == 0 or batch_index == len(train_loader)
             if should_step:
                 scaler.unscale_(optimizer)
-                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                if grad_clip is not None:
+                    nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip)
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
@@ -1401,6 +1410,7 @@ def train(args: argparse.Namespace) -> Path:
                     "target_mean": target_mean_np.tolist(),
                     "target_std": target_std_np.tolist(),
                     "max_notes": args.max_notes,
+                    "grad_clip_norm": "" if grad_clip is None else grad_clip,
                     "best_epoch": best_epoch,
                     "checkpoint_metric": checkpoint_metric,
                     "best_checkpoint_score": best_checkpoint_score,
@@ -1423,6 +1433,7 @@ def train(args: argparse.Namespace) -> Path:
                 "target_mean": target_mean_np.tolist(),
                 "target_std": target_std_np.tolist(),
                 "max_notes": args.max_notes,
+                "grad_clip_norm": "" if grad_clip is None else grad_clip,
                 "best_epoch": best_epoch,
                 "best_val_loss": best_val_loss,
                 "checkpoint_metric": checkpoint_metric,
@@ -1511,6 +1522,7 @@ def train(args: argparse.Namespace) -> Path:
         "amp_enabled": amp_active,
         "batch_size": args.batch_size,
         "grad_accum_steps": grad_accum_steps,
+        "grad_clip_norm": "" if grad_clip is None else grad_clip,
         "effective_batch_size": effective_batch_size,
         "resume": resume_requested,
         "resumed_from_epoch": resumed_from_epoch,
@@ -1550,6 +1562,12 @@ def parse_args() -> argparse.Namespace:
         type=positive_int,
         default=1,
         help="Accumulate gradients across N micro-batches before stepping. Effective batch size is batch-size * N.",
+    )
+    parser.add_argument(
+        "--grad-clip-norm",
+        type=float,
+        default=1.0,
+        help="Clip neural gradient norm before optimizer steps. Set 0 to disable clipping.",
     )
     parser.add_argument(
         "--resume",

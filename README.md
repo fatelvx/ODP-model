@@ -243,6 +243,7 @@ python -m mania_difficulty.train `
   --sequences data/processed/sequences `
   --epochs 50 `
   --batch-size 32 `
+  --grad-clip-norm 1.0 `
   --checkpoint-metric val_mean_mae `
   --sample-weight-column score_count `
   --sample-weight-min 0.25 `
@@ -255,6 +256,9 @@ For neural runs, `--checkpoint-metric` controls which epoch becomes
 `best_model.pt` and drives early stopping. Use `val_mean_mae` for the most
 readable validation error, or `val_mean_pairwise_order_accuracy` when the
 priority is ranking map pairs in the same harder/easier direction.
+Neural runs clip gradient norm at `--grad-clip-norm 1.0` by default to reduce
+unstable updates on small/noisy top100 labels; set it to `0` to disable clipping
+or lower it if training spikes.
 
 For neural runs on top100 labels, `--sample-weight-column score_count`
 downweights maps with fewer visible scores. With the defaults above, 100 scores
@@ -316,6 +320,7 @@ python -m mania_difficulty.tools.sweep_neural `
   --patience 6 `
   --batch-size 32 `
   --grad-accum-steps 1 `
+  --grad-clip-norm 1.0 `
   --checkpoint-metric val_mean_mae `
   --sample-weight-column score_count `
   --sample-weight-min 0.25 `
@@ -399,10 +404,10 @@ python -m mania_difficulty.tools.build_dashboard `
 Start with the dashboard's `Run Decision Summary` table when comparing runs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
 the generated `Next Action`; it also keeps device, AMP, effective batch size,
-epochs completed, and stop reason visible so Colab GPU runs are easier to
-compare. It also includes learning-curve health such as best/final validation
-MAE, best/final pairwise order, overfit signal, average epoch seconds, and peak
-CUDA memory. The `training_adjustment` column turns those signals into a
+gradient clip norm, epochs completed, and stop reason visible so Colab GPU runs
+are easier to compare. It also includes learning-curve health such as best/final
+validation MAE, best/final pairwise order, overfit signal, average epoch seconds,
+and peak CUDA memory. The `training_adjustment` column turns those signals into a
 conservative next-run tuning hint, such as adding regularization, running a
 small sweep, moving neural training to CUDA, or lowering batch size when memory
 is tight. If a judgment template has been filled, the summary also shows human

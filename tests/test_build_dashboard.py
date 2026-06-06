@@ -98,6 +98,7 @@ class BuildDashboardTests(unittest.TestCase):
                             "device": "cuda",
                             "amp_enabled": True,
                             "effective_batch_size": 64,
+                            "grad_clip_norm": 0.75,
                             "sample_weight_column": "score_count",
                             "sample_weight_train_mean": 0.72,
                             "sample_weight_train_downweighted_rate": 0.4,
@@ -177,6 +178,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("cuda", decision_summary)
         self.assertIn("amp_enabled", decision_summary)
         self.assertIn("effective_batch_size", decision_summary)
+        self.assertIn("grad_clip_norm", decision_summary)
+        self.assertIn("0.75", decision_summary)
         self.assertIn("sample_weight_column", decision_summary)
         self.assertIn("score_count", decision_summary)
         self.assertIn("sample_weight_train_mean", decision_summary)

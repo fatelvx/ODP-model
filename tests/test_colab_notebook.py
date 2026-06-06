@@ -15,6 +15,8 @@ class ColabNotebookTests(unittest.TestCase):
         self.assertIn("package_artifacts", source)
         self.assertIn("outputs/colab_artifact_manifest.json", source)
         self.assertIn("colab_top100_outputs.zip", source)
+        self.assertIn("GRAD_CLIP_NORM", source)
+        self.assertIn("--grad-clip-norm", source)
 
 
 if __name__ == "__main__":

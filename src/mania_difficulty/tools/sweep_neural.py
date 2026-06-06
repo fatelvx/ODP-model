@@ -228,6 +228,7 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         loader_prefetch_factor=base_args.loader_prefetch_factor,
         amp=base_args.amp,
         grad_accum_steps=getattr(base_args, "grad_accum_steps", 1),
+        grad_clip_norm=getattr(base_args, "grad_clip_norm", 1.0),
         checkpoint_metric=getattr(base_args, "checkpoint_metric", "val_loss"),
         checkpoint_backup_dir=getattr(base_args, "checkpoint_backup_dir", None),
         lstm_embed_dim=int(candidate.get("lstm_embed_dim", base_args.lstm_embed_dims[0])),
@@ -315,6 +316,7 @@ def summarize_run(
         "val_size": run_info.get("val_size"),
         "test_size": run_info.get("test_size"),
         "grad_accum_steps": run_info.get("grad_accum_steps"),
+        "grad_clip_norm": run_info.get("grad_clip_norm"),
         "effective_batch_size": run_info.get("effective_batch_size"),
         "model_config": json.dumps(run_info.get("model_config", {}), ensure_ascii=False),
     }
@@ -398,6 +400,12 @@ def main() -> None:
         type=positive_int,
         default=1,
         help="Accumulate gradients across N micro-batches for every candidate.",
+    )
+    parser.add_argument(
+        "--grad-clip-norm",
+        type=float,
+        default=1.0,
+        help="Clip neural gradient norm for every candidate. Set 0 to disable clipping.",
     )
     parser.add_argument(
         "--checkpoint-backup-dir",

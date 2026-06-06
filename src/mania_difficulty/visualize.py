@@ -123,6 +123,11 @@ def review_sections_html(run_dir: Path) -> str:
             "Pairs where the model and the top100 proxy disagree about which map is harder.",
         ),
         csv_preview_html(
+            run_dir / "error_slices.csv",
+            "Error Slices",
+            "Mean-accuracy error grouped by metadata bins such as score count and note count.",
+        ),
+        csv_preview_html(
             run_dir / "cv_human_review.csv",
             "Cross-Validation Human Review",
             "Out-of-fold maps worth checking by hand.",
@@ -133,6 +138,11 @@ def review_sections_html(run_dir: Path) -> str:
             "Out-of-fold map pairs where the model and proxy rank difficulty in opposite directions.",
         ),
         csv_preview_html(
+            run_dir / "cv_error_slices.csv",
+            "Cross-Validation Error Slices",
+            "Out-of-fold mean-accuracy error grouped by metadata bins.",
+        ),
+        csv_preview_html(
             run_dir / "eval_human_review.csv",
             "Evaluation Human Review",
             "Maps worth checking by hand for this checkpoint evaluation.",
@@ -141,6 +151,11 @@ def review_sections_html(run_dir: Path) -> str:
             run_dir / "eval_human_pair_review.csv",
             "Evaluation Pairwise Human Review",
             "Checkpoint evaluation pairs where the model and proxy rank difficulty in opposite directions.",
+        ),
+        csv_preview_html(
+            run_dir / "eval_error_slices.csv",
+            "Evaluation Error Slices",
+            "Checkpoint evaluation mean-accuracy error grouped by metadata bins.",
         ),
     ]
     return "".join(section for section in sections if section)
@@ -240,6 +255,7 @@ def write_run_report(
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
   <p>Open <code>human_review.csv</code> for maps that need human judgment.</p>
   <p>Open <code>human_pair_review.csv</code> to compare map pairs where the ranking disagrees.</p>
+  <p>Open <code>error_slices.csv</code> to see where metadata bins have larger errors.</p>
 </body>
 </html>
 """

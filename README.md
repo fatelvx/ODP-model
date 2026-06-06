@@ -107,9 +107,11 @@ Each run saves:
 - `predictions.csv`: actual model outputs on the test split
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently
+- `error_slices.csv`: mean-accuracy error grouped by metadata bins such as score count and note count
 - `prediction_scatter.png`: predicted vs actual plots
 - `cv_metrics.json`: K-fold out-of-fold metrics when `--cv-folds` is enabled
 - `cv_human_pair_review.csv`: cross-validation pairwise disagreements when `--cv-folds` is enabled
+- `cv_error_slices.csv`: cross-validation error slices when `--cv-folds` is enabled
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
 - `metrics.json`: MAE and R2 per target
 - `best_model.pt`: checkpoint for prediction

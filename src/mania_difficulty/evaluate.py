@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
+from mania_difficulty.error_analysis import write_error_slices
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
 from mania_difficulty.train import (
@@ -75,6 +76,7 @@ def main() -> None:
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
     write_human_review(out_dir / "eval_human_review.csv", args.labels, predictions_csv, target_columns)
     write_pairwise_review(out_dir / "eval_human_pair_review.csv", args.labels, predictions_csv)
+    write_error_slices(out_dir / "eval_error_slices.csv", args.labels, predictions_csv)
     metrics = regression_report(actual, pred, target_columns)
     metrics_path = out_dir / "eval_metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")

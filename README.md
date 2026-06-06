@@ -88,6 +88,9 @@ python -m mania_difficulty.tools.sweep_forest `
 
 The sweep writes `sweep_summary.csv`, `sweep_details.csv`,
 `best_params.json`, and `sweep_report.html`.
+Pass `--sample-weight-column score_count` with the same
+`--sample-weight-min` and `--sample-weight-max-value` used for training when
+the sweep should optimize reliability-weighted forest fits.
 
 Feature sets:
 
@@ -248,7 +251,10 @@ python -m mania_difficulty.tools.sweep_forest `
   --min-samples-leaf 1,2,4 `
   --max-features sqrt,0.75 `
   --feature-sets core,burst `
-  --selection-metric mean_pairwise_order_accuracy
+  --selection-metric mean_pairwise_order_accuracy `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100
 ```
 
 Train the sequence model:

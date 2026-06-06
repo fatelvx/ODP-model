@@ -638,6 +638,92 @@ Notes:
 - Keep weighting enabled when optimizing reliability/MAE on this pilot dataset,
   but do not expect it to solve ranking without better labels or more maps.
 
+### Tabular Forest Weighted MAE Sweep
+
+Code change:
+
+- `sweep_forest` now passes fold-level `sample_weight` into sklearn `fit(...)`
+  when `--sample-weight-column` is set. Before this change, weighted forest
+  training used sample weights, but forest parameter sweeps did not.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.tools.sweep_forest `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --out-dir outputs\forest_sweep_pilot_top100_weighted_mae_real `
+  --max-notes 7000 `
+  --group-column beatmapset_id `
+  --cv-folds 5 `
+  --seed 42 `
+  --trees 100,200,500,800 `
+  --min-samples-leaf 1,2,4 `
+  --max-features sqrt,0.75,1.0 `
+  --feature-sets core `
+  --selection-metric mean_mae `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --workers -1
+```
+
+Top weighted MAE sweep rows:
+
+| Candidate | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| core_trees100_leaf2_featsqrt | 0.023064 | 0.1016 | 0.4303 | 64.49% | 14.96% |
+| core_trees200_leaf2_featsqrt | 0.023189 | 0.0925 | 0.4330 | 64.46% | 14.53% |
+| core_trees800_leaf2_featsqrt | 0.023328 | 0.0916 | 0.4189 | 64.16% | 13.99% |
+| core_trees500_leaf2_featsqrt | 0.023361 | 0.0917 | 0.4177 | 64.02% | 13.87% |
+| core_trees100_leaf2_feat0.75 | 0.023594 | 0.0598 | 0.4159 | 64.07% | 13.01% |
+
+Best-candidate training command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_forest_core_weighted_mae_best_real `
+  --model tabular_forest `
+  --feature-set core `
+  --forest-trees 100 `
+  --forest-min-samples-leaf 2 `
+  --forest-max-features sqrt `
+  --cv-folds 5 `
+  --group-column beatmapset_id `
+  --max-notes 7000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --workers -1 `
+  --seed 42
+```
+
+Best-candidate 5-fold grouped out-of-fold metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.017209 | 0.1011 | 0.4598 | 65.43% | 13.45% |
+| acc_std | 0.022642 | 0.1059 | 0.3881 | 63.11% | 17.39% |
+| skill_gap | 0.029340 | 0.0979 | 0.4428 | 64.94% | 14.05% |
+
+Comparison against the previous weighted 200-tree seed-42 run:
+
+| Run | Mean CV MAE | Mean CV R2 | Mean CV Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: |
+| Weighted 200-tree seed 42 | 0.023189 | 0.0925 | 64.46% | 14.53% |
+| Weighted 100-tree seed 42 | 0.023064 | 0.1016 | 64.49% | 14.96% |
+
+Notes:
+
+- The weighted MAE sweep found a slightly smaller 100-tree forest that improves
+  seed-42 CV MAE and R2 without changing pairwise order meaningfully.
+- The holdout split for the best candidate is still noisy and loses to simple
+  baselines, so this is only a seed-42 CV tuning candidate.
+- Before promoting the 100-tree setting, run the same multi-seed stability check
+  used for the 200-tree weighted forest.
+
 ### Tabular Forest Burst
 
 Command:
@@ -679,6 +765,7 @@ Notes:
 - `outputs\pilot_top100_real_comparison.csv`
 - `outputs\pilot_top100_real_decision_summary.csv`
 - `outputs\forest_sweep_pilot_top100_pairwise_real\sweep_report.html`
+- `outputs\forest_sweep_pilot_top100_weighted_mae_real\sweep_report.html`
 - `outputs\neural_sweep_pilot_top100_summary_pairwise_real\neural_sweep_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_clean\run_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_m7000\run_report.html`
@@ -690,6 +777,7 @@ Notes:
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_weighted_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_weighted_stability_seed{7,13,42,99,123}_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_weighted_mae_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
 ## Current Decision
@@ -708,7 +796,10 @@ read the seed 42 run as optimistic. The unweighted 5-seed grouped-CV estimate is
 0.02533 +/- 0.00109 mean MAE and 58.75% +/- 3.82% pairwise order. Score-count
 weighting improves this to 0.02480 +/- 0.00091 mean MAE and 58.80% +/- 3.28%
 pairwise order, so use weighting for reliability/MAE comparisons while treating
-ranking as essentially unchanged.
+ranking as essentially unchanged. A weighted seed-42 MAE sweep found a
+100-tree candidate with slightly better CV MAE than the weighted 200-tree run,
+but it still needs multi-seed validation before replacing the stable 200-tree
+comparison baseline.
 Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
 the run is heavily truncated and ranking is weaker than the current baselines.
 
@@ -718,13 +809,15 @@ Next training iteration:
    tabular pilot comparisons, but report multi-seed CV averages instead of a
    single seed 42 score. Enable `score_count` weighting when the comparison is
    about MAE/reliability rather than pure rank order.
-2. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
+2. Run a multi-seed stability check for the weighted 100-tree candidate before
+   adopting it over the current weighted 200-tree baseline.
+3. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
    effective batch size 16 as a local smoke/tuning baseline only; require
    multi-seed or grouped-CV evidence before trusting summary quality.
-3. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
+4. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
-4. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
+5. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
    and preferably near 7000 if memory allows; CPU full-length LSTM did not
    finish epoch 1 within 10 minutes.
-5. Add more top100 maps before claiming model quality; 93 maps is still a pilot
+6. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

@@ -60,6 +60,9 @@ class HumanJudgmentTests(unittest.TestCase):
         self.assertEqual(score["model_agree_count"], 1)
         self.assertEqual(score["proxy_agree_count"], 1)
         self.assertAlmostEqual(score["model_agreement_rate"], 0.5)
+        self.assertAlmostEqual(score["proxy_agreement_rate"], 0.5)
+        self.assertAlmostEqual(score["judgment_coverage_rate"], 2 / 3)
+        self.assertAlmostEqual(score["model_vs_proxy_agreement_delta"], 0.0)
         self.assertEqual(score["unjudged_count"], 1)
 
 

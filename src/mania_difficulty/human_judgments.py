@@ -56,15 +56,21 @@ def score_pair_judgments(judgments_csv: Path) -> dict[str, Any]:
         else:
             invalid += 1
 
+    row_count = int(len(judgments))
+    model_rate = model_agree / judged if judged else 0.0
+    proxy_rate = proxy_agree / judged if judged else 0.0
+
     return {
-        "row_count": int(len(judgments)),
+        "row_count": row_count,
         "judged_count": judged,
         "unjudged_count": unjudged,
         "invalid_choice_count": invalid,
         "model_agree_count": model_agree,
         "proxy_agree_count": proxy_agree,
-        "model_agreement_rate": model_agree / judged if judged else 0.0,
-        "proxy_agreement_rate": proxy_agree / judged if judged else 0.0,
+        "judgment_coverage_rate": judged / row_count if row_count else 0.0,
+        "model_agreement_rate": model_rate,
+        "proxy_agreement_rate": proxy_rate,
+        "model_vs_proxy_agreement_delta": model_rate - proxy_rate,
     }
 
 

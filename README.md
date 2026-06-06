@@ -289,7 +289,7 @@ python -m mania_difficulty.tools.compare_runs `
 ```
 
 Build one dashboard that links the audit, sweeps, comparison, metrics, plots,
-and human-review files:
+human-review files, and any filled human judgment score tables:
 
 ```powershell
 python -m mania_difficulty.tools.build_dashboard `
@@ -304,7 +304,8 @@ python -m mania_difficulty.tools.build_dashboard `
 
 After filling `human_pair_judgment_template.csv` or
 `cv_human_pair_judgment_template.csv`, score whether the model or top100 proxy
-matched your human judgment:
+matched your human judgment. Rebuild the dashboard after filling the CSV to see
+the same score table inside the run card:
 
 ```powershell
 python -m mania_difficulty.tools.human_judgments score `

@@ -19,6 +19,16 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "run_report.html").write_text("<html>run</html>", encoding="utf-8")
             (run_dir / "learning_curve.png").write_bytes(b"png")
             (run_dir / "prediction_scatter.png").write_bytes(b"png")
+            (run_dir / "human_pair_judgment_template.csv").write_text(
+                "\n".join(
+                    [
+                        "model_harder_beatmap_id,observed_harder_beatmap_id,human_harder_beatmap_id",
+                        "11,22,11",
+                        "33,44,44",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (run_dir / "metrics.json").write_text(
                 json.dumps(
                     {
@@ -55,6 +65,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("mean_acc", html)
         self.assertIn("Dataset Audit", html)
         self.assertIn("best_forest", html)
+        self.assertIn("Human Judgment Scores", html)
+        self.assertIn("model_agreement_rate", html)
+        self.assertIn("0.500000", html)
 
 
 if __name__ == "__main__":

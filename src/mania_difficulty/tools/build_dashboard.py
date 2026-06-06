@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 
+from mania_difficulty.human_judgments import score_pair_judgments
 from mania_difficulty.tools.compare_runs import run_metrics_rows
 
 
@@ -121,6 +122,47 @@ def metrics_table(run_dirs: list[Path]) -> str:
     )
 
 
+def human_judgment_rows(run_dir: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for evaluation, filename in [
+        ("holdout", "human_pair_judgment_template.csv"),
+        ("cv_oof", "cv_human_pair_judgment_template.csv"),
+        ("checkpoint_eval", "eval_human_pair_judgment_template.csv"),
+    ]:
+        path = run_dir / filename
+        if not path.exists():
+            continue
+        try:
+            score = score_pair_judgments(path)
+        except (KeyError, ValueError, pd.errors.EmptyDataError) as exc:
+            rows.append({"evaluation": evaluation, "file": filename, "error": str(exc)})
+            continue
+        rows.append(
+            {
+                "evaluation": evaluation,
+                "file": filename,
+                "judged_count": score["judged_count"],
+                "row_count": score["row_count"],
+                "invalid_choice_count": score["invalid_choice_count"],
+                "judgment_coverage_rate": score["judgment_coverage_rate"],
+                "model_agreement_rate": score["model_agreement_rate"],
+                "proxy_agreement_rate": score["proxy_agreement_rate"],
+                "model_vs_proxy_agreement_delta": score["model_vs_proxy_agreement_delta"],
+            }
+        )
+    return rows
+
+
+def human_judgment_table(run_dir: Path) -> str:
+    rows = human_judgment_rows(run_dir)
+    if not rows:
+        return ""
+    return (
+        "<h4>Human Judgment Scores</h4>"
+        + pd.DataFrame(rows).to_html(index=False, float_format=lambda value: f"{value:.6f}")
+    )
+
+
 def run_card(run_dir: Path, out_html: Path) -> str:
     links = [
         link(run_dir / "run_report.html", "run report", out_html),
@@ -145,6 +187,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
     return (
         f'<section class="run-card"><h3>{html.escape(run_dir.name)}</h3>'
         f"<p>{links_html}</p>"
+        f"{human_judgment_table(run_dir)}"
         f"{images_html}</section>"
     )
 

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from mania_difficulty.git_metadata import git_environment_metadata
+
 
 def archive_name(path: Path, root: Path) -> str:
     try:
@@ -81,6 +83,7 @@ def package_artifacts(
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "output_zip": archive_name(out_zip, root),
         "root": str(root),
+        "source": git_environment_metadata(root),
         "included": included_roots,
         "missing": missing,
         "file_count": len(files),

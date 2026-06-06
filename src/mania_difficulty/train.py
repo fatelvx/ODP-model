@@ -5,7 +5,6 @@ import csv
 import json
 import random
 import shutil
-import subprocess
 import time
 from contextlib import nullcontext
 from functools import partial
@@ -28,6 +27,7 @@ from mania_difficulty.data.dataset import (
     label_sample_weight,
 )
 from mania_difficulty.error_analysis import write_error_slices
+from mania_difficulty.git_metadata import git_environment_metadata
 from mania_difficulty.human_judgments import write_pair_judgment_template
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
@@ -386,45 +386,6 @@ def mixed_precision_enabled(args: argparse.Namespace, device: torch.device) -> b
             raise RuntimeError("--amp on requires a CUDA device. Use --amp auto or --amp off on CPU.")
         return True
     raise ValueError(f"Unknown amp mode: {amp_mode}")
-
-
-def git_command_output(args: list[str], cwd: Path) -> str:
-    try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return ""
-    return result.stdout.strip()
-
-
-def git_environment_metadata(cwd: Path | None = None) -> dict[str, object]:
-    repo_cwd = Path.cwd() if cwd is None else Path(cwd)
-    commit = git_command_output(["rev-parse", "--short", "HEAD"], repo_cwd)
-    if not commit:
-        return {
-            "git_commit": "",
-            "git_branch": "",
-            "git_dirty": "",
-            "git_status_entries": "",
-        }
-
-    branch = git_command_output(["rev-parse", "--abbrev-ref", "HEAD"], repo_cwd)
-    if branch == "HEAD":
-        branch = ""
-    status = git_command_output(["status", "--short"], repo_cwd)
-    status_entries = len(status.splitlines()) if status else 0
-    return {
-        "git_commit": commit,
-        "git_branch": branch,
-        "git_dirty": status_entries > 0,
-        "git_status_entries": status_entries,
-    }
 
 
 def runtime_environment_metadata(

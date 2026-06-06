@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from mania_difficulty.tools.package_artifacts import package_artifacts
 
@@ -20,16 +21,26 @@ class PackageArtifactsTests(unittest.TestCase):
 
             out_zip = root / "colab_outputs.zip"
             manifest_path = outputs / "artifact_manifest.json"
-            manifest = package_artifacts(
-                [
-                    outputs / "dashboard.html",
-                    run_dir,
-                    outputs / "missing_report.html",
-                ],
-                out_zip,
-                manifest_path=manifest_path,
-                root=root,
-            )
+            git_metadata = {
+                "git_commit": "abc1234",
+                "git_branch": "main",
+                "git_dirty": False,
+                "git_status_entries": 0,
+            }
+            with patch(
+                "mania_difficulty.tools.package_artifacts.git_environment_metadata",
+                return_value=git_metadata,
+            ):
+                manifest = package_artifacts(
+                    [
+                        outputs / "dashboard.html",
+                        run_dir,
+                        outputs / "missing_report.html",
+                    ],
+                    out_zip,
+                    manifest_path=manifest_path,
+                    root=root,
+                )
 
             manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
             with zipfile.ZipFile(out_zip) as archive:
@@ -44,6 +55,9 @@ class PackageArtifactsTests(unittest.TestCase):
         self.assertIn("outputs/artifact_manifest.json", names)
         self.assertEqual(manifest_json["file_count"], 4)
         self.assertGreater(manifest_json["total_size_bytes"], 0)
+        self.assertEqual(manifest["source"]["git_commit"], "abc1234")
+        self.assertEqual(manifest_json["source"]["git_branch"], "main")
+        self.assertFalse(manifest_json["source"]["git_dirty"])
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
 MIN_USABLE_ROWS_FOR_REAL_TRAINING = 100
 MIN_FULL_TOP100_RATE = 0.8
 MAX_LOW_SCORE_COUNT_RATE = 0.25
+MAX_SEQUENCE_TRUNCATION_RATE = 0.05
 
 
 def numeric_summary(values: list[float]) -> dict[str, float | int]:
@@ -64,6 +65,25 @@ def label_reliability_summary(
         "full_top100_rate": full_top100_rows / row_count if row_count else 0.0,
         "min_score_count": float(scores.min()),
         "median_score_count": float(scores.median()),
+    }
+
+
+def sequence_truncation_summary(sequence_lengths: list[int], *, max_notes: int) -> dict[str, Any]:
+    if not sequence_lengths:
+        return {
+            "max_notes": int(max_notes),
+            "truncated_rows": 0,
+            "truncated_rate": 0.0,
+            "max_notes_over_limit": 0,
+        }
+    lengths = np.asarray(sequence_lengths, dtype=int)
+    over_limit = np.maximum(lengths - int(max_notes), 0)
+    truncated_rows = int((over_limit > 0).sum())
+    return {
+        "max_notes": int(max_notes),
+        "truncated_rows": truncated_rows,
+        "truncated_rate": truncated_rows / int(len(lengths)),
+        "max_notes_over_limit": int(over_limit.max()),
     }
 
 
@@ -113,6 +133,20 @@ def dataset_quality_warnings(summary: dict[str, Any]) -> list[dict[str, str]]:
             )
         )
 
+    truncation = summary.get("sequence_truncation", {})
+    if isinstance(truncation, dict):
+        truncated_rate = float(truncation.get("truncated_rate", 0.0) or 0.0)
+        if truncated_rate > MAX_SEQUENCE_TRUNCATION_RATE:
+            warnings.append(
+                quality_warning(
+                    "sequence_truncation",
+                    (
+                        f"{truncated_rate:.2%} of usable maps exceed max_notes "
+                        f"{truncation.get('max_notes', '')}; raise --max-notes or inspect GPU memory."
+                    ),
+                )
+            )
+
     reliability = summary.get("label_reliability", {})
     if isinstance(reliability, dict) and reliability.get("score_count_available"):
         full_top100_rate = float(reliability.get("full_top100_rate", 0.0) or 0.0)
@@ -147,6 +181,7 @@ def audit_dataset(
     sequences_dir: Path,
     *,
     target_columns: tuple[str, ...] = DEFAULT_TARGET_COLUMNS,
+    max_notes: int = 3000,
 ) -> tuple[dict[str, Any], list[dict[str, object]]]:
     labels = pd.read_csv(labels_csv)
     sequences_dir = Path(sequences_dir)
@@ -206,6 +241,7 @@ def audit_dataset(
         "group_column": "beatmapset_id" if "beatmapset_id" in labels.columns else "",
         "group_count": group_count,
         "sequence_length": numeric_summary(sequence_lengths),
+        "sequence_truncation": sequence_truncation_summary(sequence_lengths, max_notes=max_notes),
         "score_count": score_summary,
         "label_reliability": label_reliability_summary(usable),
         "targets": target_stats,
@@ -328,6 +364,23 @@ def label_reliability_table(summary: dict[str, Any]) -> str:
     return f"<h2>Label Reliability</h2><table><tbody>{row_html}</tbody></table>"
 
 
+def sequence_truncation_table(summary: dict[str, Any]) -> str:
+    truncation = summary.get("sequence_truncation", {})
+    if not isinstance(truncation, dict) or not truncation:
+        return ""
+    rows = [
+        ("Max Notes", truncation.get("max_notes", "")),
+        ("Truncated Rows", truncation.get("truncated_rows", "")),
+        ("Truncated Rate", f"{float(truncation.get('truncated_rate', 0.0)):.2%}"),
+        ("Max Notes Over Limit", truncation.get("max_notes_over_limit", "")),
+    ]
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<h2>Sequence Truncation</h2><table><tbody>{row_html}</tbody></table>"
+
+
 def quality_warnings_table(summary: dict[str, Any]) -> str:
     warnings = summary.get("quality_warnings", [])
     if not isinstance(warnings, list) or not warnings:
@@ -375,6 +428,7 @@ def write_html_report(summary: dict[str, Any], out_dir: Path) -> None:
   <p>Target columns missing: <code>{html.escape(target_missing)}</code></p>
   {summary_table(summary)}
   {quality_warnings_table(summary)}
+  {sequence_truncation_table(summary)}
   {label_reliability_table(summary)}
   {stats_table("Target Distributions", summary["targets"])}
   {stats_table("Sequence Length", sequence_stats)}
@@ -396,10 +450,21 @@ def main() -> None:
     parser.add_argument("--sequences", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, default=Path("outputs/dataset_audit"))
     parser.add_argument("--targets", default=",".join(DEFAULT_TARGET_COLUMNS))
+    parser.add_argument(
+        "--max-notes",
+        type=int,
+        default=3000,
+        help="Training max-notes value used to estimate sequence truncation risk.",
+    )
     args = parser.parse_args()
 
     target_columns = tuple(column.strip() for column in args.targets.split(",") if column.strip())
-    summary, missing_rows = audit_dataset(args.labels, args.sequences, target_columns=target_columns)
+    summary, missing_rows = audit_dataset(
+        args.labels,
+        args.sequences,
+        target_columns=target_columns,
+        max_notes=args.max_notes,
+    )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     (args.out_dir / "dataset_audit.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False),

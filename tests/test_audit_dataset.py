@@ -46,13 +46,16 @@ class AuditDatasetTests(unittest.TestCase):
             np.save(sequences_dir / "1.npy", np.zeros((5, 6), dtype=np.float32))
             np.save(sequences_dir / "2.npy", np.zeros((9, 6), dtype=np.float32))
 
-            summary, missing = audit_dataset(labels_csv, sequences_dir)
+            summary, missing = audit_dataset(labels_csv, sequences_dir, max_notes=6)
 
         self.assertEqual(summary["label_rows"], 3)
         self.assertEqual(summary["usable_rows"], 2)
         self.assertEqual(summary["missing_sequence_count"], 1)
         self.assertEqual(summary["group_count"], 2)
         self.assertEqual(summary["sequence_length"]["max"], 9)
+        self.assertEqual(summary["sequence_truncation"]["max_notes"], 6)
+        self.assertEqual(summary["sequence_truncation"]["truncated_rows"], 1)
+        self.assertAlmostEqual(summary["sequence_truncation"]["truncated_rate"], 0.5)
         self.assertAlmostEqual(summary["targets"]["mean_acc"]["mean"], 0.85)
         self.assertEqual(summary["label_reliability"]["full_top100_rows"], 1)
         self.assertAlmostEqual(summary["label_reliability"]["full_top100_rate"], 0.5)
@@ -64,6 +67,7 @@ class AuditDatasetTests(unittest.TestCase):
         self.assertIn("small_usable_dataset", warning_codes)
         self.assertIn("low_full_top100_rate", warning_codes)
         self.assertIn("high_low_score_count_rate", warning_codes)
+        self.assertIn("sequence_truncation", warning_codes)
         self.assertEqual(missing[0]["beatmap_id"], 3)
 
     def test_audit_html_report_includes_label_reliability(self):
@@ -79,6 +83,12 @@ class AuditDatasetTests(unittest.TestCase):
                 "group_count": 1,
                 "targets": {},
                 "sequence_length": {"count": 2, "min": 5, "median": 7, "mean": 7, "max": 9, "std": 2},
+                "sequence_truncation": {
+                    "max_notes": 6,
+                    "truncated_rows": 1,
+                    "truncated_rate": 0.5,
+                    "max_notes_over_limit": 3,
+                },
                 "score_count": {"count": 2, "min": 70, "median": 85, "mean": 85, "max": 100, "std": 15},
                 "quality_warnings": [
                     {
@@ -106,6 +116,8 @@ class AuditDatasetTests(unittest.TestCase):
         self.assertIn("Dataset Quality Warnings", html)
         self.assertIn("low_full_top100_rate", html)
         self.assertIn("Only 50.00%", html)
+        self.assertIn("Sequence Truncation", html)
+        self.assertIn("Truncated Rate", html)
 
 
 if __name__ == "__main__":

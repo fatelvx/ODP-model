@@ -714,6 +714,157 @@ Notes:
   should use GPU runtime for longer/fuller experiments and should consider
   training-signal changes instead of only increasing hidden size locally.
 
+### osu!mania Keys / HP / OD Metadata Check
+
+Pipeline updates:
+
+- `fetch_maps` now writes `mode`, `circle_size`, `keys`, `hp_drain_rate`,
+  `overall_difficulty`, and `approach_rate` when the osu! API provides them.
+- `enrich_osu_metadata` can backfill those fields from local `.osu` files for
+  existing labels.
+- `tabular_forest` supports `core_metadata` and `burst_metadata` feature sets,
+  appending mode/keys/HP/OD/AR/difficulty/length/BPM metadata to the existing
+  tabular sequence summaries.
+
+Enrichment command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.tools.enrich_osu_metadata `
+  --labels data\processed\labels_pilot_top100.csv `
+  --osu-dir data\raw\osu_pilot `
+  --out data\processed\labels_pilot_top100_metadata.csv
+```
+
+Pilot metadata audit:
+
+| Check | Result |
+| --- | --- |
+| Rows | 93 |
+| Mode distribution | `3.0: 93` |
+| Keys distribution | `4.0: 93` |
+| Missing HP | 0 |
+| Missing OD | 0 |
+| Missing AR | 0 |
+| HP range | 5.000 - 8.600 |
+| OD range | 5.000 - 8.500 |
+| AR range | 5.000 - 9.000 |
+
+Clean single-seed metadata forest command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100_metadata.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_forest_core_metadata_weighted_clean_real `
+  --model tabular_forest `
+  --feature-set core_metadata `
+  --forest-trees 200 `
+  --forest-min-samples-leaf 2 `
+  --forest-max-features sqrt `
+  --cv-folds 5 `
+  --group-column beatmapset_id `
+  --max-notes 7000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --workers -1 `
+  --seed 42
+```
+
+5-seed metadata stability command:
+
+```powershell
+$seeds = 7,13,42,99,123
+foreach ($seed in $seeds) {
+  .\.venv\Scripts\python.exe -m mania_difficulty.train `
+    --labels data\processed\labels_pilot_top100_metadata.csv `
+    --sequences data\processed\sequences_pilot `
+    --run-name "pilot_top100_forest_core_metadata_weighted_stability_seed${seed}_real" `
+    --model tabular_forest `
+    --feature-set core_metadata `
+    --forest-trees 200 `
+    --forest-min-samples-leaf 2 `
+    --forest-max-features sqrt `
+    --cv-folds 5 `
+    --group-column beatmapset_id `
+    --max-notes 7000 `
+    --sample-weight-column score_count `
+    --sample-weight-min 0.25 `
+    --sample-weight-max-value 100 `
+    --workers -1 `
+    --seed $seed
+}
+```
+
+Metadata 5-seed grouped out-of-fold stability, averaged across the three
+targets:
+
+| Seed | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement | Targets beating train-mean baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.026350 | -0.0604 | 0.1559 | 55.04% | 4.39% | 3 / 3 |
+| 13 | 0.025110 | 0.0324 | 0.2635 | 58.47% | 8.30% | 3 / 3 |
+| 42 | 0.024274 | 0.0539 | 0.3295 | 61.27% | 10.52% | 3 / 3 |
+| 99 | 0.025519 | -0.0361 | 0.1641 | 55.42% | 7.23% | 3 / 3 |
+| 123 | 0.026502 | -0.0804 | 0.1150 | 53.53% | 5.47% | 3 / 3 |
+
+Metadata versus current weighted core stability:
+
+| Run family | Seeds | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Weighted core | 5 | 0.024802 +/- 0.000913 | 0.0066 +/- 0.0586 | 0.2717 +/- 0.0965 | 58.80% +/- 3.28% | 9.89% +/- 2.62% |
+| Weighted core + metadata | 5 | 0.025551 +/- 0.000821 | -0.0181 +/- 0.0524 | 0.2056 +/- 0.0789 | 56.75% +/- 2.77% | 7.18% +/- 2.15% |
+
+Top single-seed metadata feature importances:
+
+| Rank | Feature | Importance |
+| ---: | --- | ---: |
+| 1 | notes_per_sec | 0.068741 |
+| 2 | duration_sec_log | 0.044225 |
+| 3 | short_gap_50ms_ratio | 0.043117 |
+| 4 | delta_p50 | 0.042968 |
+| 5 | metadata_overall_difficulty | 0.042423 |
+| 12 | metadata_bpm | 0.033624 |
+| 14 | metadata_difficulty_rating | 0.031902 |
+
+Notes:
+
+- The current pilot is confirmed as osu!mania 4K: all 93 enriched rows have
+  `mode=3` and `keys=4`.
+- HP/OD/AR are now available for future features and audits. This matters
+  because the current labels are accuracy-derived; OD changes hit windows and
+  can move accuracy without changing raw note patterns.
+- Simply appending metadata to the forest did not improve the stable baseline.
+  Across five seeds it worsened MAE, Spearman, pairwise order, and improvement
+  percentage versus weighted core.
+- Keep metadata in the pipeline, but use it carefully: as controls/slices,
+  calibration features, and future dan-alignment context rather than an
+  automatic model upgrade on this 93-map pilot.
+
+### Dan Calibration Direction
+
+Stable long-term target:
+
+- Learn a model difficulty coordinate from chart features, observed score
+  behavior, and human/dan ordering, then calibrate that coordinate onto known
+  osu!mania dan scales.
+- Do not train directly to osu! star rating as the final truth. Star ratings can
+  change with reworks, while dan/course systems are closer to the "same
+  difficulty feel" target we want to preserve.
+- Keep key modes separate. The current dataset is only 4K, and official mania
+  guidance treats key-mode/playstyle as separate enough that a shared model
+  should either condition on keys or train separate calibrators.
+
+Implementation sketch for later:
+
+1. Build a `dan_anchors.csv` with `beatmap_id`, `keys`, `dan_system`,
+   `dan_tier`, `skillset`, `rate`, and optional clear/accuracy threshold.
+2. Add pairwise/order constraints from dan tiers: higher dan tier should score
+   harder than lower tier within the same key mode and skillset.
+3. Train a latent model on top100 labels plus dan anchors, then fit a monotonic
+   calibrator from latent score to dan tier.
+4. Report both raw latent difficulty and calibrated dan estimate, so future SR
+   reworks do not redefine the model target.
+
 ### Tabular Forest Core
 
 Command:
@@ -1200,6 +1351,8 @@ Notes:
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12_rankckpt\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_small_e8\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_metadata_weighted_clean_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_metadata_weighted_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
@@ -1243,6 +1396,13 @@ A modest CPU capacity increase (`embed=16`, `hidden=32`) widened prediction
 spread a little but still only reached 0.76%-1.68% of actual target spread, and
 it worsened mean holdout MAE/pairwise versus tiny e12. Local capacity scaling is
 not the right next lever by itself.
+The pilot metadata audit confirms all current maps are osu!mania 4K and now has
+HP/OD/AR available. Adding those metadata features directly to the weighted core
+forest did not improve stability: 5-seed CV MAE worsened from 0.02480 to
+0.02555 and pairwise order from 58.80% to 56.75%. Treat metadata as required
+context/control variables, not an automatic small-data upgrade.
+The target should become a stable latent difficulty coordinate calibrated to
+human/dan ordering, not a moving star-rating label.
 
 Next training iteration:
 
@@ -1269,3 +1429,7 @@ Next training iteration:
    not improve holdout quality.
 6. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.
+7. Build a dan-anchor dataset for 4K first: record dan system/tier/skillset/rate
+   per chart, then train/evaluate an ordinal or pairwise calibration layer on
+   top of the current features. Use separate key-mode handling before mixing 7K
+   or other key counts.

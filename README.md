@@ -107,10 +107,12 @@ Each run saves:
 - `predictions.csv`: actual model outputs on the test split
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently
+- `human_pair_judgment_template.csv`: fillable CSV for scoring model/proxy agreement with human judgment
 - `error_slices.csv`: mean-accuracy error grouped by metadata bins such as score count and note count
 - `prediction_scatter.png`: predicted vs actual plots
 - `cv_metrics.json`: K-fold out-of-fold metrics when `--cv-folds` is enabled
 - `cv_human_pair_review.csv`: cross-validation pairwise disagreements when `--cv-folds` is enabled
+- `cv_human_pair_judgment_template.csv`: fillable out-of-fold human judgment CSV
 - `cv_error_slices.csv`: cross-validation error slices when `--cv-folds` is enabled
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
 - `metrics.json`: MAE and R2 per target
@@ -298,6 +300,17 @@ python -m mania_difficulty.tools.build_dashboard `
   --neural-sweep-dir outputs/neural_sweep_top100 `
   --comparison-html outputs/run_comparison.html `
   --out-html outputs/dashboard.html
+```
+
+After filling `human_pair_judgment_template.csv` or
+`cv_human_pair_judgment_template.csv`, score whether the model or top100 proxy
+matched your human judgment:
+
+```powershell
+python -m mania_difficulty.tools.human_judgments score `
+  --judgments outputs/runs/lstm_top100_baseline/human_pair_judgment_template.csv `
+  --out-json outputs/human_judgment_score.json `
+  --out-html outputs/human_judgment_score.html
 ```
 
 Predict one `.osu` file after training:

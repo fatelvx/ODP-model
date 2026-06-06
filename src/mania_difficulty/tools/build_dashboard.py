@@ -127,8 +127,10 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         link(run_dir / "predictions.csv", "predictions", out_html),
         link(run_dir / "human_review.csv", "human review", out_html),
         link(run_dir / "human_pair_review.csv", "pairwise review", out_html),
+        link(run_dir / "human_pair_judgment_template.csv", "judgment template", out_html),
         link(run_dir / "error_slices.csv", "error slices", out_html),
         link(run_dir / "cv_human_review.csv", "CV human review", out_html),
+        link(run_dir / "cv_human_pair_judgment_template.csv", "CV judgment template", out_html),
         link(run_dir / "cv_error_slices.csv", "CV error slices", out_html),
     ]
     links_html = " ".join(item for item in links if item)

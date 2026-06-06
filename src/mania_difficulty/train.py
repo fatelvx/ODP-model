@@ -23,6 +23,7 @@ from mania_difficulty.data.dataset import (
     collate_batch,
 )
 from mania_difficulty.error_analysis import write_error_slices
+from mania_difficulty.human_judgments import write_pair_judgment_template
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
 from mania_difficulty.models.tabular import feature_names_for_set, summarize_sequence
@@ -567,6 +568,10 @@ def write_tabular_cross_validation(
         target_column="mean_acc",
         top_n=30,
     )
+    write_pair_judgment_template(
+        run_dir / "cv_human_pair_judgment_template.csv",
+        run_dir / "cv_human_pair_review.csv",
+    )
     write_error_slices(
         run_dir / "cv_error_slices.csv",
         args.labels,
@@ -653,6 +658,10 @@ def train_tabular_forest(
     write_predictions(predictions_csv, beatmap_ids, y_test, test_pred, target_columns)
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
     write_pairwise_review(run_dir / "human_pair_review.csv", args.labels, predictions_csv)
+    write_pair_judgment_template(
+        run_dir / "human_pair_judgment_template.csv",
+        run_dir / "human_pair_review.csv",
+    )
     write_error_slices(run_dir / "error_slices.csv", args.labels, predictions_csv, target_column="mean_acc")
 
     baseline_pred = repeat_baseline(y_test, y_train.mean(axis=0))
@@ -838,6 +847,10 @@ def train(args: argparse.Namespace) -> Path:
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
     write_pairwise_review(run_dir / "human_pair_review.csv", args.labels, predictions_csv)
+    write_pair_judgment_template(
+        run_dir / "human_pair_judgment_template.csv",
+        run_dir / "human_pair_review.csv",
+    )
     write_error_slices(run_dir / "error_slices.csv", args.labels, predictions_csv, target_column="mean_acc")
 
     baseline_pred = repeat_baseline(actual, target_mean_np)

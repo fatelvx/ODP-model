@@ -123,6 +123,11 @@ def review_sections_html(run_dir: Path) -> str:
             "Pairs where the model and the top100 proxy disagree about which map is harder.",
         ),
         csv_preview_html(
+            run_dir / "human_pair_judgment_template.csv",
+            "Human Pair Judgment Template",
+            "Fill human_harder_beatmap_id with the beatmap ID that feels harder after comparing the pair.",
+        ),
+        csv_preview_html(
             run_dir / "error_slices.csv",
             "Error Slices",
             "Mean-accuracy error grouped by metadata bins such as score count and note count.",
@@ -138,6 +143,11 @@ def review_sections_html(run_dir: Path) -> str:
             "Out-of-fold map pairs where the model and proxy rank difficulty in opposite directions.",
         ),
         csv_preview_html(
+            run_dir / "cv_human_pair_judgment_template.csv",
+            "Cross-Validation Human Pair Judgment Template",
+            "Fill human_harder_beatmap_id to score out-of-fold model agreement with human judgment.",
+        ),
+        csv_preview_html(
             run_dir / "cv_error_slices.csv",
             "Cross-Validation Error Slices",
             "Out-of-fold mean-accuracy error grouped by metadata bins.",
@@ -151,6 +161,11 @@ def review_sections_html(run_dir: Path) -> str:
             run_dir / "eval_human_pair_review.csv",
             "Evaluation Pairwise Human Review",
             "Checkpoint evaluation pairs where the model and proxy rank difficulty in opposite directions.",
+        ),
+        csv_preview_html(
+            run_dir / "eval_human_pair_judgment_template.csv",
+            "Evaluation Human Pair Judgment Template",
+            "Fill human_harder_beatmap_id to score checkpoint agreement with human judgment.",
         ),
         csv_preview_html(
             run_dir / "eval_error_slices.csv",
@@ -255,6 +270,7 @@ def write_run_report(
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
   <p>Open <code>human_review.csv</code> for maps that need human judgment.</p>
   <p>Open <code>human_pair_review.csv</code> to compare map pairs where the ranking disagrees.</p>
+  <p>Fill <code>human_pair_judgment_template.csv</code>, then score it with <code>python -m mania_difficulty.tools.human_judgments score</code>.</p>
   <p>Open <code>error_slices.csv</code> to see where metadata bins have larger errors.</p>
 </body>
 </html>

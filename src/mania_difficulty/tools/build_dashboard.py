@@ -16,7 +16,9 @@ from mania_difficulty.visualize import (
     model_verdict_html,
     model_verdict_summary,
     training_health_html,
+    training_health_summary,
     training_performance_html,
+    training_performance_summary,
     worst_error_slices_html,
 )
 
@@ -38,6 +40,15 @@ DECISION_COLUMNS = [
     "epochs_completed",
     "stop_reason",
     "early_stopped",
+    "curve_best_epoch",
+    "curve_best_val_loss",
+    "curve_best_val_mean_mae",
+    "curve_best_val_pairwise_order",
+    "curve_final_val_mean_mae",
+    "curve_final_val_pairwise_order",
+    "curve_overfit_signal",
+    "avg_epoch_seconds",
+    "peak_cuda_memory_mb",
     "targets",
     "mean_mae",
     "mean_pairwise_order_accuracy",
@@ -203,6 +214,8 @@ def metrics_table(run_dirs: list[Path]) -> str:
 def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     judgment_by_evaluation = human_judgment_summary_by_evaluation(run_dir)
+    health = training_health_summary(run_dir / "history.csv")
+    performance = training_performance_summary(run_dir / "history.csv")
     for metrics_name, default_evaluation in [
         ("metrics.json", "holdout"),
         ("cv_metrics.json", "cv_oof"),
@@ -254,6 +267,18 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
                 "epochs_completed": run_info.get("epochs_completed", ""),
                 "stop_reason": run_info.get("stop_reason", ""),
                 "early_stopped": run_info.get("early_stopped", ""),
+                "curve_best_epoch": health.get("best_epoch", ""),
+                "curve_best_val_loss": health.get("best_val_loss", ""),
+                "curve_best_val_mean_mae": health.get("best_val_mean_mae", ""),
+                "curve_best_val_pairwise_order": health.get("best_val_pairwise_order", ""),
+                "curve_final_val_mean_mae": health.get("final_val_mean_mae", ""),
+                "curve_final_val_pairwise_order": health.get(
+                    "final_val_pairwise_order",
+                    "",
+                ),
+                "curve_overfit_signal": health.get("overfit_signal", ""),
+                "avg_epoch_seconds": performance.get("average_epoch_seconds", ""),
+                "peak_cuda_memory_mb": performance.get("peak_cuda_memory_mb", ""),
                 "targets": summary.get("target_count", ""),
                 "mean_mae": summary.get("mean_mae", ""),
                 "mean_pairwise_order_accuracy": summary.get(

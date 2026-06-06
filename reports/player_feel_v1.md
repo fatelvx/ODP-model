@@ -26,6 +26,10 @@ ranker. `confidence` is used as sample weight for judged rows.
 - Added pair candidate generation for whole-map and segment comparisons.
 - Added a confidence-weighted pairwise logistic ranker and HTML/CSV/JSON report
   outputs.
+- Added a local browser labeler for pairwise judgments. It loads the generated
+  pair CSV, filters by stage/scope/status, supports `A`, `B`, `tie`,
+  `uncertain`, `out_of_range`, and `skip`, and writes
+  `confidence`/`reason_tags`/`notes` back to the same file.
 
 ## Smoke Training Evidence
 
@@ -51,6 +55,30 @@ Smoke result:
 
 This proves the V1 ranking pipeline trains and evaluates end to end. It does
 not prove true human-feel quality because the smoke labels are synthetic.
+
+## Annotation UI
+
+Start the local labeler with:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.tools.serve_player_feel_labeler `
+  --pairs outputs\player_feel_v1_pilot_real\player_feel_pairs_to_label.csv `
+  --host 127.0.0.1 `
+  --port 8765
+```
+
+Then open `http://127.0.0.1:8765`. The UI is intentionally optimized for the
+current rater-coverage problem: if a pair is too easy to feel accurately or too
+hard to judge from experience, mark `out_of_range` or `uncertain` instead of
+forcing a fake answer.
+
+HTTP smoke check passed against a temporary copy of the real pilot pair CSV:
+
+| Check | Result |
+| --- | --- |
+| `/health` | ok |
+| `/api/state?status=open` | returned the first open pair |
+| `/api/save` | saved `out_of_range` to the temporary CSV |
 
 ## Real Pilot Artifacts
 

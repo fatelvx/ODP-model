@@ -63,6 +63,21 @@ python -m mania_difficulty.tools.train_feel_ranker `
   --out-dir outputs/player_feel_v1_pilot_real/ranker
 ```
 
+Use the local labeler when editing pair judgments by hand:
+
+```powershell
+python -m mania_difficulty.tools.serve_player_feel_labeler `
+  --pairs outputs/player_feel_v1_pilot_real/player_feel_pairs_to_label.csv `
+  --host 127.0.0.1 `
+  --port 8765
+```
+
+Then open `http://127.0.0.1:8765`. It writes the selected
+`harder_choice`, `confidence`, `reason_tags`, and `notes` back into the same
+CSV. Use `out_of_range` or `uncertain` when a pair is below or above your
+reliable feel range; those rows stay in the audit trail but are ignored by the
+ranker.
+
 ## Quick Smoke Test Without osu! API
 
 Local setup uses Python 3.12 in this repo because the default Python on this

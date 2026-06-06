@@ -25,6 +25,12 @@ class BuildDashboardTests(unittest.TestCase):
                 "beatmap_id,projection_x,projection_y\n1,0.0,1.0\n",
                 encoding="utf-8",
             )
+            (run_dir / "attention_map.png").write_bytes(b"png")
+            (run_dir / "attention_report.html").write_text("<html>attention</html>", encoding="utf-8")
+            (run_dir / "attention_map.csv").write_text(
+                "note_index,attention\n0,1.0\n",
+                encoding="utf-8",
+            )
             (run_dir / "human_pair_judgment_template.csv").write_text(
                 "\n".join(
                     [
@@ -70,6 +76,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("learning_curve.png", html)
         self.assertIn("embedding_report.html", html)
         self.assertIn("embedding_projection.png", html)
+        self.assertIn("attention_report.html", html)
+        self.assertIn("attention_map.png", html)
         self.assertIn("mean_acc", html)
         self.assertIn("Dataset Audit", html)
         self.assertIn("best_forest", html)

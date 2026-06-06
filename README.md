@@ -111,6 +111,7 @@ Each run saves:
 - `error_slices.csv`: mean-accuracy error grouped by metadata bins such as score count and note count
 - `prediction_scatter.png`: predicted vs actual plots
 - `embedding_projection.csv`, `embedding_projection.png`, `embedding_report.html`: 2D model embedding projection when `project_embeddings` is run
+- `attention_map.csv`, `attention_map.png`, `attention_report.html`: Transformer note-level attention for one selected map when `attention_map` is run
 - `cv_metrics.json`: K-fold out-of-fold metrics when `--cv-folds` is enabled
 - `cv_human_pair_review.csv`: cross-validation pairwise disagreements when `--cv-folds` is enabled
 - `cv_human_pair_judgment_template.csv`: fillable out-of-fold human judgment CSV
@@ -325,6 +326,16 @@ python -m mania_difficulty.tools.project_embeddings `
   --sequences data/processed/sequences `
   --method pca `
   --color-target mean_acc
+```
+
+For a Transformer checkpoint, visualize note-level attention on one selected
+map. The output is a column/time plot plus a CSV of per-note attention weights:
+
+```powershell
+python -m mania_difficulty.tools.attention_map `
+  --checkpoint outputs/runs/transformer_top100_pilot/best_model.pt `
+  --beatmap-id 123456 `
+  --sequences data/processed/sequences
 ```
 
 Build one dashboard that links the audit, sweeps, comparison, metrics, plots,

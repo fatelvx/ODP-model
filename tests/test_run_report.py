@@ -23,6 +23,8 @@ class RunReportTests(unittest.TestCase):
             ).to_csv(run_dir / "human_pair_review.csv", index=False)
             (run_dir / "embedding_projection.png").write_bytes(b"png")
             (run_dir / "embedding_report.html").write_text("<html>embeddings</html>", encoding="utf-8")
+            (run_dir / "attention_map.png").write_bytes(b"png")
+            (run_dir / "attention_report.html").write_text("<html>attention</html>", encoding="utf-8")
 
             write_run_report(run_dir, target_columns=["mean_acc"])
 
@@ -32,6 +34,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("pairwise_rank_disagreement", report)
         self.assertIn("Embedding Projection", report)
         self.assertIn("embedding_report.html", report)
+        self.assertIn("Transformer Attention Map", report)
+        self.assertIn("attention_report.html", report)
 
 
 if __name__ == "__main__":

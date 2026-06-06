@@ -250,6 +250,21 @@ def write_run_report(
             else ""
         )
         embedding_html = f"<h2>Embedding Projection</h2>{report_link}{image_html}"
+    attention_html = ""
+    attention_png = run_dir / "attention_map.png"
+    attention_report = run_dir / "attention_report.html"
+    if attention_png.exists() or attention_report.exists():
+        report_link = (
+            '<p><a href="attention_report.html">attention_report.html</a></p>'
+            if attention_report.exists()
+            else ""
+        )
+        image_html = (
+            '<p><img src="attention_map.png" alt="Transformer attention map"></p>'
+            if attention_png.exists()
+            else ""
+        )
+        attention_html = f"<h2>Transformer Attention Map</h2>{report_link}{image_html}"
     review_html = review_sections_html(run_dir)
 
     report = f"""<!doctype html>
@@ -281,6 +296,7 @@ def write_run_report(
   {scatter_html}
   {f"<h2>Feature Importance</h2>{feature_importance_html}" if feature_importance_html else ""}
   {embedding_html}
+  {attention_html}
   {review_html}
   <h2>Files</h2>
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
@@ -289,6 +305,7 @@ def write_run_report(
   <p>Fill <code>human_pair_judgment_template.csv</code>, then score it with <code>python -m mania_difficulty.tools.human_judgments score</code>.</p>
   <p>Open <code>error_slices.csv</code> to see where metadata bins have larger errors.</p>
   <p>Open <code>embedding_report.html</code> to inspect whether model embeddings cluster into meaningful map groups.</p>
+  <p>Open <code>attention_report.html</code> to inspect Transformer note-level attention for one selected map.</p>
 </body>
 </html>
 """

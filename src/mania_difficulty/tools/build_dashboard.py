@@ -16,6 +16,7 @@ from mania_difficulty.visualize import (
     model_verdict_html,
     training_health_html,
     training_performance_html,
+    worst_error_slices_html,
 )
 
 
@@ -273,6 +274,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         f"{human_judgment_table(run_dir)}"
         f"{training_health_html(run_dir / 'history.csv', heading_level=4)}"
         f"{training_performance_html(run_dir / 'history.csv', heading_level=4)}"
+        f"{worst_error_slices_html(run_dir / 'error_slices.csv', heading_level=4)}"
         f"{images_html}</section>"
     )
 
@@ -300,6 +302,7 @@ def write_dashboard(
     section {{ margin: 0 0 32px; }}
     .run-card {{ border-top: 1px solid #d9e2ec; padding-top: 16px; }}
     img {{ max-width: 100%; border: 1px solid #d9e2ec; margin: 8px 0; }}
+    .table-wrap {{ overflow-x: auto; max-width: 100%; }}
     table {{ border-collapse: collapse; margin: 12px 0 24px; }}
     th, td {{ border: 1px solid #bcccdc; padding: 8px 12px; text-align: right; }}
     th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) {{ text-align: left; }}

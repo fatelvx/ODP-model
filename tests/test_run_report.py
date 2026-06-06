@@ -40,6 +40,40 @@ class RunReportTests(unittest.TestCase):
             pd.DataFrame(
                 [
                     {
+                        "slice_column": "overall",
+                        "slice_value": "all",
+                        "count": 4,
+                        "actual_mean": 0.8,
+                        "pred_mean": 0.78,
+                        "mae": 0.08,
+                        "bias": -0.02,
+                        "max_abs_error": 0.15,
+                    },
+                    {
+                        "slice_column": "score_count",
+                        "slice_value": "high",
+                        "count": 2,
+                        "actual_mean": 0.7,
+                        "pred_mean": 0.9,
+                        "mae": 0.25,
+                        "bias": 0.2,
+                        "max_abs_error": 0.3,
+                    },
+                    {
+                        "slice_column": "num_notes",
+                        "slice_value": "low",
+                        "count": 2,
+                        "actual_mean": 0.9,
+                        "pred_mean": 0.85,
+                        "mae": 0.05,
+                        "bias": -0.05,
+                        "max_abs_error": 0.06,
+                    },
+                ]
+            ).to_csv(run_dir / "error_slices.csv", index=False)
+            pd.DataFrame(
+                [
+                    {
                         "epoch": 1,
                         "train_loss": 0.5,
                         "val_loss": 0.4,
@@ -116,6 +150,9 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("attention_report.html", report)
         self.assertIn("Prediction Rankings", report)
         self.assertIn("predicted_hardest", report)
+        self.assertIn("Worst Error Slices", report)
+        self.assertIn("score_count: high", report)
+        self.assertIn("0.250000", report)
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
         self.assertIn("Grad Accum Steps", report)

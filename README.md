@@ -104,7 +104,7 @@ Each run saves:
 
 - `history.csv`: train/val loss, validation MAE, validation pairwise order, epoch seconds, LR, and CUDA peak memory per epoch
 - `learning_curve.png`: loss curve plus validation MAE / pairwise-order curve when available
-- `run_report.html`: includes Model Verdict, Training Health, and Training Performance tables for quick quality, validation metrics, loss, speed, LR, and memory checks
+- `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, and fragile metadata-bin checks
 - `predictions.csv`: actual model outputs on the test split
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand
@@ -356,7 +356,8 @@ python -m mania_difficulty.tools.attention_map `
 ```
 
 Build one dashboard that links the audit, sweeps, comparison, metrics, plots,
-human-review files, and any filled human judgment score tables:
+human-review files, worst error slices, and any filled human judgment score
+tables:
 
 ```powershell
 python -m mania_difficulty.tools.build_dashboard `

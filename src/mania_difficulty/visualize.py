@@ -399,6 +399,73 @@ def checkpoint_score_text(metric: object, score: object) -> str:
     return f"{parsed:.6f}"
 
 
+def worst_error_slice_rows(path: Path, *, top_n: int = 5) -> list[dict[str, object]]:
+    if not path.exists():
+        return []
+    try:
+        frame = pd.read_csv(path)
+    except (pd.errors.EmptyDataError, ValueError):
+        return []
+    required_columns = {"slice_column", "slice_value", "count", "mae", "bias", "max_abs_error"}
+    if frame.empty or not required_columns.issubset(frame.columns):
+        return []
+
+    working = frame.copy()
+    for column in ["count", "mae", "bias", "max_abs_error"]:
+        working[column] = pd.to_numeric(working[column], errors="coerce")
+    working = working.dropna(subset=["mae"])
+    if working.empty:
+        return []
+
+    non_overall = working[working["slice_column"].astype(str) != "overall"]
+    if not non_overall.empty:
+        working = non_overall
+    working = working.sort_values(["mae", "max_abs_error"], ascending=[False, False]).head(top_n)
+    rows = []
+    for _, row in working.iterrows():
+        rows.append(
+            {
+                "slice": f"{row['slice_column']}: {row['slice_value']}",
+                "count": int(row["count"]) if pd.notna(row["count"]) else "",
+                "mae": float(row["mae"]),
+                "bias": float(row["bias"]) if pd.notna(row["bias"]) else None,
+                "max_abs_error": (
+                    float(row["max_abs_error"]) if pd.notna(row["max_abs_error"]) else None
+                ),
+            }
+        )
+    return rows
+
+
+def worst_error_slices_html(path: Path, *, heading_level: int = 2, top_n: int = 5) -> str:
+    rows = worst_error_slice_rows(path, top_n=top_n)
+    if not rows:
+        return ""
+    heading_tag = f"h{heading_level}"
+
+    def format_optional_float(value: object) -> str:
+        parsed = metric_float(value)
+        return "" if parsed is None else f"{parsed:.6f}"
+
+    row_html = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(row['slice']))}</td>"
+        f"<td>{html.escape(str(row['count']))}</td>"
+        f"<td>{row['mae']:.6f}</td>"
+        f"<td>{html.escape(format_optional_float(row['bias']))}</td>"
+        f"<td>{html.escape(format_optional_float(row['max_abs_error']))}</td>"
+        "</tr>"
+        for row in rows
+    )
+    return (
+        f"<{heading_tag}>Worst Error Slices</{heading_tag}>"
+        "<p>Highest-MAE metadata bins, excluding the overall row when slice rows exist.</p>"
+        "<div class=\"table-wrap\"><table><thead><tr>"
+        "<th>Slice</th><th>Count</th><th>MAE</th><th>Bias</th><th>Max Abs Error</th>"
+        f"</tr></thead><tbody>{row_html}</tbody></table></div>"
+    )
+
+
 def csv_preview_html(path: Path, title: str, description: str, *, max_rows: int = 20) -> str:
     if not path.exists():
         return ""
@@ -576,6 +643,7 @@ def write_run_report(
     )
     health_html = training_health_html(run_dir / "history.csv")
     performance_html = training_performance_html(run_dir / "history.csv")
+    worst_error_html = worst_error_slices_html(run_dir / "error_slices.csv")
     embedding_html = ""
     embedding_png = run_dir / "embedding_projection.png"
     embedding_report = run_dir / "embedding_report.html"
@@ -634,6 +702,7 @@ def write_run_report(
   {cv_html}
   {health_html}
   {performance_html}
+  {worst_error_html}
   <h2>Learning Curve</h2>
   {learning_curve_html}
   <h2>Predicted vs Observed Proxy</h2>

@@ -24,6 +24,17 @@ class BuildDashboardTests(unittest.TestCase):
                 "ranking_section,rank,beatmap_id\npredicted_hardest,1,1\n",
                 encoding="utf-8",
             )
+            (run_dir / "error_slices.csv").write_text(
+                "\n".join(
+                    [
+                        "slice_column,slice_value,count,actual_mean,pred_mean,mae,bias,max_abs_error",
+                        "overall,all,4,0.8,0.78,0.08,-0.02,0.15",
+                        "score_count,high,2,0.7,0.9,0.25,0.2,0.3",
+                        "num_notes,low,2,0.9,0.85,0.05,-0.05,0.06",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (run_dir / "embedding_projection.png").write_bytes(b"png")
             (run_dir / "embedding_report.html").write_text("<html>embeddings</html>", encoding="utf-8")
             (run_dir / "embedding_projection.csv").write_text(
@@ -152,6 +163,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Model Verdict", html)
         self.assertIn("Targets Beating Baseline", html)
         self.assertIn("Weakest Target", html)
+        self.assertIn("Worst Error Slices", html)
+        self.assertIn("score_count: high", html)
+        self.assertIn("0.250000", html)
         self.assertIn("Checkpoint Selection", html)
         self.assertIn("Checkpoint Metric", html)
         self.assertIn("val_mean_pairwise_order_accuracy", html)

@@ -186,6 +186,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Targets Beating Baseline", report)
         self.assertIn("Targets Beating Difficulty Rating", report)
         self.assertIn("Mean Difficulty Rating Improvement", report)
+        self.assertIn("Next Action", report)
+        self.assertIn("ranking signal is weak", report)
         self.assertIn("Difficulty Rating Baseline MAE", report)
         self.assertIn("Difficulty Rating Improvement", report)
         self.assertIn("33.33%", report)

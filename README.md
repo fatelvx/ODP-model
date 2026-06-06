@@ -124,6 +124,11 @@ Each run saves:
 - `best_model.pt`: checkpoint for prediction, selected by `--checkpoint-metric` for neural runs
 - `last_checkpoint.pt`: neural training state for `--resume`
 
+Model Verdict includes `Next Action`, a conservative recommendation based on
+baseline wins and ranking signal. It is meant to answer whether the next step
+should be label/human review, feature/model tuning, or keeping the run as the
+current baseline.
+
 Metrics include a train-mean baseline when available:
 
 - `baseline_mae`: MAE from predicting the training mean for that target

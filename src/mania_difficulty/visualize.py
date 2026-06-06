@@ -393,7 +393,43 @@ def model_verdict_summary(metrics: dict, target_columns: list[str] | None = None
         summary["mean_difficulty_rating_improvement_pct"] = sum(
             difficulty_improvement_values
         ) / len(difficulty_improvement_values)
+    summary["next_action"] = model_next_action(summary)
     return summary
+
+
+def model_next_action(summary: dict[str, object]) -> str:
+    difficulty_target_count = int(summary.get("difficulty_baseline_target_count", 0))
+    if difficulty_target_count and int(
+        summary.get("targets_beating_difficulty_rating_baseline", 0)
+    ) < difficulty_target_count:
+        return (
+            "Inspect labels/features before longer GPU training; "
+            "the model is not beating difficulty_rating for every target."
+        )
+
+    baseline_target_count = int(summary.get("baseline_target_count", 0))
+    if (
+        baseline_target_count
+        and int(summary.get("targets_beating_baseline", 0)) < baseline_target_count
+    ):
+        weakest_target = str(summary.get("weakest_target", "the weakest target"))
+        return (
+            f"Fix {weakest_target} before longer training: inspect error slices "
+            "and human review, then try feature or model tuning."
+        )
+
+    pairwise = metric_float(summary.get("mean_pairwise_order_accuracy"))
+    if pairwise is not None and pairwise < 0.55:
+        return (
+            "Prioritize more labels or human judgments before longer GPU training; "
+            "ranking signal is weak."
+        )
+    if pairwise is not None and pairwise < 0.70:
+        return (
+            "Run a small feature/model sweep and compare pairwise ordering "
+            "before a long final run."
+        )
+    return "Keep this run as a baseline and compare the next sweep or human judgments against it."
 
 
 def model_verdict_html(
@@ -438,6 +474,7 @@ def model_verdict_html(
                 f"{summary['mean_difficulty_rating_improvement_pct'] * 100:.2f}%",
             )
         )
+    rows.append(("Next Action", summary["next_action"]))
     rows.append(("Weakest Target", summary["weakest_target"]))
     row_html = "".join(
         f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"

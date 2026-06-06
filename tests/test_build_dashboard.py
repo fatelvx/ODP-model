@@ -171,6 +171,7 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Targets Beating Baseline", html)
         self.assertIn("Targets Beating Difficulty Rating", html)
         self.assertIn("Mean Difficulty Rating Improvement", html)
+        self.assertIn("Next Action", html)
         self.assertIn("Weakest Target", html)
         self.assertIn("Worst Error Slices", html)
         self.assertIn("score_count: high", html)

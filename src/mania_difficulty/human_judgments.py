@@ -32,6 +32,18 @@ def normalize_human_choice(value: object) -> int | None:
         return None
 
 
+def normalize_human_confidence(value: object) -> float:
+    if pd.isna(value) or str(value).strip() == "":
+        return 1.0
+    try:
+        confidence = float(str(value).strip())
+    except ValueError:
+        return 1.0
+    if confidence <= 0:
+        return 1.0
+    return confidence
+
+
 def score_pair_judgments(judgments_csv: Path) -> dict[str, Any]:
     judgments = pd.read_csv(judgments_csv)
     model_agree = 0
@@ -39,20 +51,28 @@ def score_pair_judgments(judgments_csv: Path) -> dict[str, Any]:
     invalid = 0
     unjudged = 0
     judged = 0
+    weighted_model_agree = 0.0
+    weighted_proxy_agree = 0.0
+    weighted_judged = 0.0
 
     for _, row in judgments.iterrows():
         human_choice = normalize_human_choice(row.get("human_harder_beatmap_id", ""))
         if human_choice is None:
             unjudged += 1
             continue
+        confidence = normalize_human_confidence(row.get("human_confidence", ""))
         model_harder = int(row["model_harder_beatmap_id"])
         observed_harder = int(row["observed_harder_beatmap_id"])
         if human_choice == model_harder:
             model_agree += 1
             judged += 1
+            weighted_model_agree += confidence
+            weighted_judged += confidence
         elif human_choice == observed_harder:
             proxy_agree += 1
             judged += 1
+            weighted_proxy_agree += confidence
+            weighted_judged += confidence
         else:
             invalid += 1
 
@@ -71,6 +91,20 @@ def score_pair_judgments(judgments_csv: Path) -> dict[str, Any]:
         "model_agreement_rate": model_rate,
         "proxy_agreement_rate": proxy_rate,
         "model_vs_proxy_agreement_delta": model_rate - proxy_rate,
+        "confidence_weighted_judged_count": weighted_judged,
+        "confidence_weighted_model_agree_count": weighted_model_agree,
+        "confidence_weighted_proxy_agree_count": weighted_proxy_agree,
+        "confidence_weighted_model_agreement_rate": (
+            weighted_model_agree / weighted_judged if weighted_judged else 0.0
+        ),
+        "confidence_weighted_proxy_agreement_rate": (
+            weighted_proxy_agree / weighted_judged if weighted_judged else 0.0
+        ),
+        "confidence_weighted_model_vs_proxy_delta": (
+            (weighted_model_agree - weighted_proxy_agree) / weighted_judged
+            if weighted_judged
+            else 0.0
+        ),
     }
 
 

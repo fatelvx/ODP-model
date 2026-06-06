@@ -364,7 +364,8 @@ python -m mania_difficulty.tools.build_dashboard `
 After filling `human_pair_judgment_template.csv` or
 `cv_human_pair_judgment_template.csv`, score whether the model or top100 proxy
 matched your human judgment. Rebuild the dashboard after filling the CSV to see
-the same score table inside the run card:
+the same score table inside the run card. `human_confidence` is optional; when
+filled, the score also reports confidence-weighted agreement rates:
 
 ```powershell
 python -m mania_difficulty.tools.human_judgments score `

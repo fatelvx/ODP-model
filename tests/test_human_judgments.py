@@ -40,16 +40,19 @@ class HumanJudgmentTests(unittest.TestCase):
                         "model_harder_beatmap_id": 1,
                         "observed_harder_beatmap_id": 2,
                         "human_harder_beatmap_id": 1,
+                        "human_confidence": 2,
                     },
                     {
                         "model_harder_beatmap_id": 3,
                         "observed_harder_beatmap_id": 4,
                         "human_harder_beatmap_id": 4,
+                        "human_confidence": 1,
                     },
                     {
                         "model_harder_beatmap_id": 5,
                         "observed_harder_beatmap_id": 6,
                         "human_harder_beatmap_id": "",
+                        "human_confidence": 5,
                     },
                 ]
             ).to_csv(judgments_csv, index=False)
@@ -64,6 +67,10 @@ class HumanJudgmentTests(unittest.TestCase):
         self.assertAlmostEqual(score["judgment_coverage_rate"], 2 / 3)
         self.assertAlmostEqual(score["model_vs_proxy_agreement_delta"], 0.0)
         self.assertEqual(score["unjudged_count"], 1)
+        self.assertAlmostEqual(score["confidence_weighted_judged_count"], 3.0)
+        self.assertAlmostEqual(score["confidence_weighted_model_agreement_rate"], 2 / 3)
+        self.assertAlmostEqual(score["confidence_weighted_proxy_agreement_rate"], 1 / 3)
+        self.assertAlmostEqual(score["confidence_weighted_model_vs_proxy_delta"], 1 / 3)
 
 
 if __name__ == "__main__":

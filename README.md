@@ -104,6 +104,7 @@ Each run saves:
 
 - `history.csv`: train/val loss per epoch
 - `learning_curve.png`: growth curve
+- `run_report.html`: includes a Training Health table summarizing best epoch, final losses, generalization gap, and possible overfit signal
 - `predictions.csv`: actual model outputs on the test split
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently

@@ -11,6 +11,7 @@ import pandas as pd
 
 from mania_difficulty.human_judgments import score_pair_judgments
 from mania_difficulty.tools.compare_runs import run_metrics_rows
+from mania_difficulty.visualize import training_health_html
 
 
 def href(path: Path, out_html: Path) -> str:
@@ -194,6 +195,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         f'<section class="run-card"><h3>{html.escape(run_dir.name)}</h3>'
         f"<p>{links_html}</p>"
         f"{human_judgment_table(run_dir)}"
+        f"{training_health_html(run_dir / 'history.csv', heading_level=4)}"
         f"{images_html}</section>"
     )
 

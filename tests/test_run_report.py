@@ -26,6 +26,13 @@ class RunReportTests(unittest.TestCase):
             (run_dir / "embedding_report.html").write_text("<html>embeddings</html>", encoding="utf-8")
             (run_dir / "attention_map.png").write_bytes(b"png")
             (run_dir / "attention_report.html").write_text("<html>attention</html>", encoding="utf-8")
+            pd.DataFrame(
+                [
+                    {"epoch": 1, "train_loss": 0.5, "val_loss": 0.4},
+                    {"epoch": 2, "train_loss": 0.3, "val_loss": 0.35},
+                    {"epoch": 3, "train_loss": 0.2, "val_loss": 0.5},
+                ]
+            ).to_csv(run_dir / "history.csv", index=False)
             metrics_path = run_dir / "metrics.json"
             metrics_path.write_text(
                 json.dumps(
@@ -59,6 +66,11 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Grad Accum Steps", report)
         self.assertIn("Effective Batch Size", report)
         self.assertIn("16", report)
+        self.assertIn("Training Health", report)
+        self.assertIn("Best Epoch", report)
+        self.assertIn("Generalization Gap", report)
+        self.assertIn("Overfit Signal", report)
+        self.assertIn("Possible", report)
 
 
 if __name__ == "__main__":

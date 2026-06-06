@@ -41,6 +41,17 @@ class BuildDashboardTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (run_dir / "history.csv").write_text(
+                "\n".join(
+                    [
+                        "epoch,train_loss,val_loss",
+                        "1,0.5,0.4",
+                        "2,0.3,0.35",
+                        "3,0.2,0.5",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (run_dir / "metrics.json").write_text(
                 json.dumps(
                     {
@@ -84,6 +95,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)
         self.assertIn("0.500000", html)
+        self.assertIn("Training Health", html)
+        self.assertIn("Best Epoch", html)
+        self.assertIn("Overfit Signal", html)
 
 
 if __name__ == "__main__":

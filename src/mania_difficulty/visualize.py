@@ -67,6 +67,67 @@ def plot_feature_importance(importances_csv: Path, out_path: Path, *, top_n: int
     plt.close(fig)
 
 
+def training_health_summary(history_csv: Path) -> dict[str, object]:
+    if not history_csv.exists():
+        return {}
+    try:
+        history = pd.read_csv(history_csv)
+    except (pd.errors.EmptyDataError, ValueError):
+        return {}
+    required_columns = {"epoch", "train_loss", "val_loss"}
+    if not required_columns.issubset(history.columns):
+        return {}
+    history = history.dropna(subset=["epoch", "train_loss", "val_loss"])
+    if history.empty:
+        return {}
+
+    best_row = history.loc[history["val_loss"].idxmin()]
+    final_row = history.iloc[-1]
+    best_val_loss = float(best_row["val_loss"])
+    final_train_loss = float(final_row["train_loss"])
+    final_val_loss = float(final_row["val_loss"])
+    val_loss_regression = final_val_loss - best_val_loss
+    generalization_gap = final_val_loss - final_train_loss
+    regression_threshold = max(0.01, abs(best_val_loss) * 0.05)
+    overfit_signal = (
+        "Possible"
+        if val_loss_regression > regression_threshold and generalization_gap > 0
+        else "No obvious"
+    )
+    return {
+        "best_epoch": int(best_row["epoch"]),
+        "best_val_loss": best_val_loss,
+        "final_epoch": int(final_row["epoch"]),
+        "final_train_loss": final_train_loss,
+        "final_val_loss": final_val_loss,
+        "generalization_gap": generalization_gap,
+        "val_loss_regression": val_loss_regression,
+        "overfit_signal": overfit_signal,
+    }
+
+
+def training_health_html(history_csv: Path, *, heading_level: int = 2) -> str:
+    summary = training_health_summary(history_csv)
+    if not summary:
+        return ""
+    heading_tag = f"h{heading_level}"
+    rows = [
+        ("Best Epoch", summary["best_epoch"]),
+        ("Best Val Loss", f"{summary['best_val_loss']:.6f}"),
+        ("Final Epoch", summary["final_epoch"]),
+        ("Final Train Loss", f"{summary['final_train_loss']:.6f}"),
+        ("Final Val Loss", f"{summary['final_val_loss']:.6f}"),
+        ("Generalization Gap", f"{summary['generalization_gap']:.6f}"),
+        ("Val Loss Since Best", f"{summary['val_loss_regression']:.6f}"),
+        ("Overfit Signal", summary["overfit_signal"]),
+    ]
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<{heading_tag}>Training Health</{heading_tag}><table><tbody>{row_html}</tbody></table>"
+
+
 def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
     rows = []
     for target in target_columns:
@@ -240,6 +301,7 @@ def write_run_report(
         if feature_importance_name and (run_dir / feature_importance_name).exists()
         else ""
     )
+    health_html = training_health_html(run_dir / "history.csv")
     embedding_html = ""
     embedding_png = run_dir / "embedding_projection.png"
     embedding_report = run_dir / "embedding_report.html"
@@ -295,6 +357,7 @@ def write_run_report(
   <h2>Metrics</h2>
   {metrics_html}
   {cv_html}
+  {health_html}
   <h2>Learning Curve</h2>
   {learning_curve_html}
   <h2>Predicted vs Observed Proxy</h2>

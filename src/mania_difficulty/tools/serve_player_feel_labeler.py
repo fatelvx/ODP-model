@@ -66,6 +66,46 @@ def row_to_json(row: pd.Series) -> dict[str, object]:
     return {column: clean_value(row.get(column, "")) for column in ANNOTATION_COLUMNS}
 
 
+def strain_values(frame: pd.DataFrame) -> list[float]:
+    values = pd.concat(
+        [
+            pd.to_numeric(frame["a_peak_strain"], errors="coerce"),
+            pd.to_numeric(frame["b_peak_strain"], errors="coerce"),
+        ]
+    ).dropna()
+    return sorted(float(value) for value in values)
+
+
+def percentile_rank(value: object, values: list[float]) -> float | None:
+    if not values:
+        return None
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return None
+    below_or_equal = sum(1 for candidate in values if candidate <= numeric_value)
+    return round((below_or_equal / len(values)) * 100.0, 1)
+
+
+def add_strain_context(pair: dict[str, object] | None, values: list[float]) -> dict[str, object] | None:
+    if pair is None:
+        return None
+    output = dict(pair)
+    for prefix in ("a", "b"):
+        output[f"{prefix}_strain_percentile"] = percentile_rank(
+            output.get(f"{prefix}_peak_strain", ""), values
+        )
+    return output
+
+
+def add_pair_peak(frame: pd.DataFrame) -> pd.DataFrame:
+    output = frame.copy()
+    a_peak = pd.to_numeric(output["a_peak_strain"], errors="coerce").fillna(0.0)
+    b_peak = pd.to_numeric(output["b_peak_strain"], errors="coerce").fillna(0.0)
+    output["_pair_peak"] = pd.concat([a_peak, b_peak], axis=1).max(axis=1)
+    return output
+
+
 class LabelerStore:
     def __init__(self, pairs_csv: Path):
         self.pairs_csv = Path(pairs_csv)
@@ -99,9 +139,11 @@ class LabelerStore:
             filtered = filtered[filtered["scope"].astype(str) == scope]
         if status:
             filtered = filtered[filtered["_status"].astype(str) == status]
-        filtered = filtered.reset_index(drop=True)
+        filtered = add_pair_peak(filtered).sort_values("_pair_peak", ascending=False).reset_index(drop=True)
         safe_index = max(0, min(int(index), max(len(filtered) - 1, 0)))
+        values = strain_values(frame)
         current = row_to_json(filtered.iloc[safe_index]) if len(filtered) else None
+        current = add_strain_context(current, values)
         return {
             "pairs_csv": str(self.pairs_csv),
             "total_count": int(len(frame)),
@@ -116,6 +158,10 @@ class LabelerStore:
             "skip_count": int((frame["_status"] == "skip").sum()),
             "stages": sorted(str(value) for value in frame["player_stage"].dropna().unique()),
             "scopes": sorted(str(value) for value in frame["scope"].dropna().unique()),
+            "strain_reference": {
+                "min": round(values[0], 3) if values else None,
+                "max": round(values[-1], 3) if values else None,
+            },
         }
 
     def save(self, payload: dict[str, object]) -> dict[str, object]:
@@ -266,6 +312,21 @@ HTML = r"""<!doctype html>
     }
     .metric span { display: block; color: var(--muted); font-size: 11px; }
     .metric strong { display: block; margin-top: 3px; font-size: 18px; overflow-wrap: anywhere; }
+    .metric small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .strain-bar {
+      margin-top: 8px;
+      height: 6px;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #2d3541;
+    }
+    .strain-bar i {
+      display: block;
+      height: 100%;
+      width: var(--fill);
+      background: linear-gradient(90deg, var(--good), var(--warn), var(--bad));
+    }
     .judgebar { align-items: end; }
     .choice-row {
       display: flex;
@@ -341,7 +402,7 @@ HTML = r"""<!doctype html>
     </section>
   </main>
   <script>
-    const state = { stage: "", scope: "", status: "open", index: 0, current: null };
+    const state = { stage: "dan_ready", scope: "", status: "open", index: 0, current: null };
     const $ = (id) => document.getElementById(id);
     function esc(value) {
       return String(value ?? "").replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -350,6 +411,26 @@ HTML = r"""<!doctype html>
       const n = Number(value);
       if (Number.isFinite(n)) return n.toFixed(2);
       return value || "";
+    }
+    function pressureBand(percentile) {
+      const n = Number(percentile);
+      if (!Number.isFinite(n)) return "未知";
+      if (n < 20) return "低";
+      if (n < 40) return "偏低";
+      if (n < 60) return "中";
+      if (n < 80) return "偏高";
+      return "高";
+    }
+    function pressureMetric(pair, prefix) {
+      const raw = pair[`${prefix}_peak_strain`];
+      const percentile = Number(pair[`${prefix}_strain_percentile`]);
+      const safePercentile = Number.isFinite(percentile) ? Math.max(0, Math.min(100, percentile)) : 0;
+      return `<div class="metric">
+        <span>相對壓力</span>
+        <strong>${esc(pressureBand(percentile))}</strong>
+        <small>PR ${Number.isFinite(percentile) ? percentile.toFixed(1) : "?"} · 原始 ${esc(fmt(raw))}</small>
+        <div class="strain-bar"><i style="--fill: ${safePercentile}%"></i></div>
+      </div>`;
     }
     function side(pair, prefix, label) {
       const title = pair[`${prefix}_title`] || `Beatmap ${pair[`${prefix}_beatmap_id`]}`;
@@ -360,7 +441,7 @@ HTML = r"""<!doctype html>
         <div class="stat">${esc(pair[`${prefix}_artist`] || "")} ${esc(pair[`${prefix}_version`] || "")}</div>
         <div class="metric-grid">
           <div class="metric"><span>Beatmap</span><strong>${esc(pair[`${prefix}_beatmap_id`])}</strong></div>
-          <div class="metric"><span>峰值壓力</span><strong>${fmt(pair[`${prefix}_peak_strain`])}</strong></div>
+          ${pressureMetric(pair, prefix)}
           <div class="metric"><span>主技能</span><strong>${esc(pair[`${prefix}_dominant_skill`] || "")}</strong></div>
         </div>
       </article>`;

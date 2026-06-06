@@ -55,6 +55,8 @@ class PlayerFeelLabelerTests(unittest.TestCase):
             self.assertEqual(state["total_count"], 2)
             self.assertEqual(state["filtered_count"], 1)
             self.assertEqual(state["current"]["pair_id"], "p1")
+            self.assertIn("a_strain_percentile", state["current"])
+            self.assertIn("strain_reference", state)
 
             saved = store.save(
                 {

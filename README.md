@@ -190,7 +190,8 @@ python -m mania_difficulty.tools.audit_dataset `
 The audit writes `dataset_audit.json`, `missing_sequences.csv`,
 `dataset_distributions.png`, and `dataset_audit.html` so we can catch missing
 parsed files, weak label coverage, or narrow target distributions before
-spending GPU time.
+spending GPU time. The audit also reports Label Reliability from `score_count`,
+including the full top100 rate and maps below the low-score threshold.
 
 Train a small-data forest baseline:
 

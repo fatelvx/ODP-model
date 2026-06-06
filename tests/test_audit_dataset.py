@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from mania_difficulty.tools.audit_dataset import audit_dataset
+from mania_difficulty.tools.audit_dataset import audit_dataset, write_html_report
 
 
 class AuditDatasetTests(unittest.TestCase):
@@ -54,7 +54,43 @@ class AuditDatasetTests(unittest.TestCase):
         self.assertEqual(summary["group_count"], 2)
         self.assertEqual(summary["sequence_length"]["max"], 9)
         self.assertAlmostEqual(summary["targets"]["mean_acc"]["mean"], 0.85)
+        self.assertEqual(summary["label_reliability"]["full_top100_rows"], 1)
+        self.assertAlmostEqual(summary["label_reliability"]["full_top100_rate"], 0.5)
+        self.assertEqual(summary["label_reliability"]["low_score_count_threshold"], 80)
+        self.assertEqual(summary["label_reliability"]["low_score_count_rows"], 1)
+        self.assertAlmostEqual(summary["label_reliability"]["low_score_count_rate"], 0.5)
         self.assertEqual(missing[0]["beatmap_id"], 3)
+
+    def test_audit_html_report_includes_label_reliability(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            summary = {
+                "target_missing": [],
+                "label_rows": 2,
+                "usable_rows": 2,
+                "missing_sequence_count": 0,
+                "extra_sequence_count": 0,
+                "duplicate_beatmap_id_count": 0,
+                "group_count": 1,
+                "targets": {},
+                "sequence_length": {"count": 2, "min": 5, "median": 7, "mean": 7, "max": 9, "std": 2},
+                "score_count": {"count": 2, "min": 70, "median": 85, "mean": 85, "max": 100, "std": 15},
+                "label_reliability": {
+                    "score_count_available": True,
+                    "low_score_count_threshold": 80,
+                    "low_score_count_rows": 1,
+                    "low_score_count_rate": 0.5,
+                    "full_top100_rows": 1,
+                    "full_top100_rate": 0.5,
+                },
+            }
+
+            write_html_report(summary, out_dir)
+            html = (out_dir / "dataset_audit.html").read_text(encoding="utf-8")
+
+        self.assertIn("Label Reliability", html)
+        self.assertIn("Full Top100 Rate", html)
+        self.assertIn("Low Score Count Rate", html)
 
 
 if __name__ == "__main__":

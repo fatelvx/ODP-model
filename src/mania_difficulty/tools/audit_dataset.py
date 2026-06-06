@@ -36,6 +36,32 @@ def sequence_length(path: Path) -> int:
     return int(array.shape[0])
 
 
+def label_reliability_summary(
+    usable: pd.DataFrame,
+    *,
+    low_score_count_threshold: int = 80,
+) -> dict[str, Any]:
+    if "score_count" not in usable.columns:
+        return {"score_count_available": False}
+    scores = pd.to_numeric(usable["score_count"], errors="coerce").dropna()
+    if scores.empty:
+        return {"score_count_available": False}
+    row_count = int(len(scores))
+    low_rows = int((scores < low_score_count_threshold).sum())
+    full_top100_rows = int((scores >= 100).sum())
+    return {
+        "score_count_available": True,
+        "usable_score_count_rows": row_count,
+        "low_score_count_threshold": low_score_count_threshold,
+        "low_score_count_rows": low_rows,
+        "low_score_count_rate": low_rows / row_count if row_count else 0.0,
+        "full_top100_rows": full_top100_rows,
+        "full_top100_rate": full_top100_rows / row_count if row_count else 0.0,
+        "min_score_count": float(scores.min()),
+        "median_score_count": float(scores.median()),
+    }
+
+
 def audit_dataset(
     labels_csv: Path,
     sequences_dir: Path,
@@ -101,6 +127,7 @@ def audit_dataset(
         "group_count": group_count,
         "sequence_length": numeric_summary(sequence_lengths),
         "score_count": score_summary,
+        "label_reliability": label_reliability_summary(usable),
         "targets": target_stats,
     }
     return summary, missing_rows
@@ -199,6 +226,27 @@ def stats_table(title: str, stats: dict[str, Any]) -> str:
     )
 
 
+def label_reliability_table(summary: dict[str, Any]) -> str:
+    reliability = summary.get("label_reliability", {})
+    if not reliability or not reliability.get("score_count_available"):
+        return ""
+    rows = [
+        ("Usable Score Count Rows", reliability.get("usable_score_count_rows", 0)),
+        ("Low Score Count Threshold", reliability.get("low_score_count_threshold", "")),
+        ("Low Score Count Rows", reliability.get("low_score_count_rows", 0)),
+        ("Low Score Count Rate", f"{float(reliability.get('low_score_count_rate', 0.0)):.2%}"),
+        ("Full Top100 Rows", reliability.get("full_top100_rows", 0)),
+        ("Full Top100 Rate", f"{float(reliability.get('full_top100_rate', 0.0)):.2%}"),
+        ("Min Score Count", f"{float(reliability.get('min_score_count', 0.0)):.0f}"),
+        ("Median Score Count", f"{float(reliability.get('median_score_count', 0.0)):.0f}"),
+    ]
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<h2>Label Reliability</h2><table><tbody>{row_html}</tbody></table>"
+
+
 def write_html_report(summary: dict[str, Any], out_dir: Path) -> None:
     target_missing = ", ".join(summary["target_missing"]) if summary["target_missing"] else "none"
     sequence_stats = {"sequence_length": summary["sequence_length"]}
@@ -221,6 +269,7 @@ def write_html_report(summary: dict[str, Any], out_dir: Path) -> None:
   <h1>Dataset Audit</h1>
   <p>Target columns missing: <code>{html.escape(target_missing)}</code></p>
   {summary_table(summary)}
+  {label_reliability_table(summary)}
   {stats_table("Target Distributions", summary["targets"])}
   {stats_table("Sequence Length", sequence_stats)}
   {stats_table("Score Count", score_stats)}

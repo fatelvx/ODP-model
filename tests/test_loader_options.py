@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import torch
 
-from mania_difficulty.train import dataloader_options
+from mania_difficulty.train import dataloader_options, mixed_precision_enabled
 
 
 class LoaderOptionTests(unittest.TestCase):
@@ -26,6 +26,23 @@ class LoaderOptionTests(unittest.TestCase):
         self.assertTrue(options["pin_memory"])
         self.assertTrue(options["persistent_workers"])
         self.assertEqual(options["prefetch_factor"], 3)
+
+    def test_mixed_precision_auto_only_enables_cuda(self):
+        args = SimpleNamespace(amp="auto")
+
+        self.assertFalse(mixed_precision_enabled(args, torch.device("cpu")))
+        self.assertTrue(mixed_precision_enabled(args, torch.device("cuda")))
+
+    def test_mixed_precision_on_rejects_cpu(self):
+        args = SimpleNamespace(amp="on")
+
+        with self.assertRaises(RuntimeError):
+            mixed_precision_enabled(args, torch.device("cpu"))
+
+    def test_mixed_precision_off_disables_cuda(self):
+        args = SimpleNamespace(amp="off")
+
+        self.assertFalse(mixed_precision_enabled(args, torch.device("cuda")))
 
 
 if __name__ == "__main__":

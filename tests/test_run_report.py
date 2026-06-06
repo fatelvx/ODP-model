@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,8 +26,18 @@ class RunReportTests(unittest.TestCase):
             (run_dir / "embedding_report.html").write_text("<html>embeddings</html>", encoding="utf-8")
             (run_dir / "attention_map.png").write_bytes(b"png")
             (run_dir / "attention_report.html").write_text("<html>attention</html>", encoding="utf-8")
+            metrics_path = run_dir / "metrics.json"
+            metrics_path.write_text(
+                json.dumps(
+                    {
+                        "mean_acc": {"mae": 0.1, "r2": 0.2, "spearman": 0.3, "pairwise_order_accuracy": 0.4},
+                        "_run": {"model_name": "summary", "amp": "auto", "amp_enabled": False},
+                    }
+                ),
+                encoding="utf-8",
+            )
 
-            write_run_report(run_dir, target_columns=["mean_acc"])
+            write_run_report(run_dir, target_columns=["mean_acc"], metrics_path=metrics_path)
 
             report = (run_dir / "run_report.html").read_text(encoding="utf-8")
 
@@ -36,6 +47,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("embedding_report.html", report)
         self.assertIn("Transformer Attention Map", report)
         self.assertIn("attention_report.html", report)
+        self.assertIn("AMP Enabled", report)
+        self.assertIn("False", report)
 
 
 if __name__ == "__main__":

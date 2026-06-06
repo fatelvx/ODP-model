@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import random
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 
@@ -209,6 +210,34 @@ def dataloader_options(args: argparse.Namespace, device: torch.device) -> dict[s
     return options
 
 
+def mixed_precision_enabled(args: argparse.Namespace, device: torch.device) -> bool:
+    amp_mode = getattr(args, "amp", "auto")
+    if amp_mode == "off":
+        return False
+    if amp_mode == "auto":
+        return device.type == "cuda"
+    if amp_mode == "on":
+        if device.type != "cuda":
+            raise RuntimeError("--amp on requires a CUDA device. Use --amp auto or --amp off on CPU.")
+        return True
+    raise ValueError(f"Unknown amp mode: {amp_mode}")
+
+
+def autocast_context(device: torch.device, enabled: bool):
+    if not enabled:
+        return nullcontext()
+    return torch.autocast(device_type=device.type, dtype=torch.float16, enabled=enabled)
+
+
+def make_grad_scaler(enabled: bool):
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        try:
+            return torch.amp.GradScaler("cuda", enabled=enabled)
+        except TypeError:
+            return torch.amp.GradScaler(enabled=enabled)
+    return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
 @torch.no_grad()
 def evaluate_loader(
     model: torch.nn.Module,
@@ -218,6 +247,7 @@ def evaluate_loader(
     target_std_t: torch.Tensor,
     target_mean_np: np.ndarray,
     target_std_np: np.ndarray,
+    amp_enabled: bool = False,
 ) -> tuple[float, np.ndarray, np.ndarray, list[int]]:
     model.eval()
     losses = []
@@ -231,8 +261,9 @@ def evaluate_loader(
         lengths = batch.lengths.to(device)
         targets = batch.targets.to(device)
         normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
-        normalized_pred = model(features, lengths)
-        loss = weighted_huber_loss(normalized_pred, normalized_targets, weights)
+        with autocast_context(device, amp_enabled):
+            normalized_pred = model(features, lengths)
+            loss = weighted_huber_loss(normalized_pred, normalized_targets, weights)
         losses.append(float(loss.item()))
 
         pred = inverse_transform(normalized_pred.cpu().numpy(), target_mean_np, target_std_np)
@@ -747,6 +778,7 @@ def train(args: argparse.Namespace) -> Path:
     target_mean_np, target_std_np = target_stats(dataset, train_indices)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     loader_kwargs = dataloader_options(args, device)
+    amp_active = mixed_precision_enabled(args, device)
 
     collate = partial(collate_batch, max_notes=args.max_notes)
     train_loader = DataLoader(
@@ -774,6 +806,7 @@ def train(args: argparse.Namespace) -> Path:
     model = create_model(args.model, output_dim=len(target_columns), config=model_config_from_args(args)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
+    scaler = make_grad_scaler(amp_active)
     target_mean_t = torch.tensor(target_mean_np, dtype=torch.float32, device=device)
     target_std_t = torch.tensor(target_std_np, dtype=torch.float32, device=device)
     loss_weights = torch.tensor(args.loss_weights, dtype=torch.float32, device=device)
@@ -798,11 +831,14 @@ def train(args: argparse.Namespace) -> Path:
             normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
 
             optimizer.zero_grad(set_to_none=True)
-            pred = model(features, lengths)
-            loss = weighted_huber_loss(pred, normalized_targets, loss_weights)
-            loss.backward()
+            with autocast_context(device, amp_active):
+                pred = model(features, lengths)
+                loss = weighted_huber_loss(pred, normalized_targets, loss_weights)
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             train_losses.append(float(loss.item()))
 
         scheduler.step()
@@ -815,6 +851,7 @@ def train(args: argparse.Namespace) -> Path:
             target_std_t,
             target_mean_np,
             target_std_np,
+            amp_active,
         )
         append_history(history_csv, epoch, train_loss, val_loss)
         print(f"epoch={epoch:03d} train_loss={train_loss:.5f} val_loss={val_loss:.5f}")
@@ -852,6 +889,7 @@ def train(args: argparse.Namespace) -> Path:
         target_std_t,
         target_mean_np,
         target_std_np,
+        amp_active,
     )
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
@@ -874,6 +912,8 @@ def train(args: argparse.Namespace) -> Path:
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "test_loss": test_loss,
+        "amp": getattr(args, "amp", "auto"),
+        "amp_enabled": amp_active,
         "train_size": len(train_indices),
         "val_size": len(val_indices),
         "test_size": len(test_indices),
@@ -891,7 +931,7 @@ def train(args: argparse.Namespace) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train the LSTM mania difficulty baseline.")
+    parser = argparse.ArgumentParser(description="Train an osu!mania difficulty model.")
     parser.add_argument("--labels", type=Path, required=True)
     parser.add_argument("--sequences", type=Path, required=True)
     parser.add_argument("--run-name", default="lstm_baseline")
@@ -955,6 +995,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2,
         help="DataLoader prefetch factor when --loader-workers is greater than 0.",
+    )
+    parser.add_argument(
+        "--amp",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="Mixed precision for neural models. auto enables it on CUDA and disables it on CPU.",
     )
     parser.add_argument("--lstm-embed-dim", type=int, default=64)
     parser.add_argument("--lstm-hidden-dim", type=int, default=128)

@@ -17,6 +17,7 @@ from mania_difficulty.models.factory import create_model
 from mania_difficulty.train import (
     dataloader_options,
     evaluate_loader,
+    mixed_precision_enabled,
     write_human_review,
     write_pairwise_review,
     write_predictions,
@@ -35,9 +36,11 @@ def main() -> None:
     parser.add_argument("--loader-workers", type=int, default=0)
     parser.add_argument("--pin-memory", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--loader-prefetch-factor", type=int, default=2)
+    parser.add_argument("--amp", choices=["auto", "on", "off"], default="auto")
     args = parser.parse_args()
 
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    amp_active = mixed_precision_enabled(args, device)
     checkpoint = torch.load(args.checkpoint, map_location=device)
     target_columns = list(checkpoint["target_columns"])
     target_mean_np = np.asarray(checkpoint["target_mean"], dtype="float32")
@@ -69,6 +72,7 @@ def main() -> None:
         target_std_t,
         target_mean_np,
         target_std_np,
+        amp_active,
     )
 
     out_dir = args.out_dir or args.checkpoint.parent

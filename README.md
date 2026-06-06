@@ -295,6 +295,7 @@ python -m mania_difficulty.tools.sweep_neural `
   --selection-metric mean_pairwise_order_accuracy `
   --max-candidates 4 `
   --loader-workers 2 `
+  --amp auto `
   --device cuda
 ```
 
@@ -304,7 +305,8 @@ The neural sweep writes `neural_sweep_summary.csv`,
 prediction error, or `--selection-metric mean_pairwise_order_accuracy` when the
 priority is choosing the same harder/easier direction a human would compare.
 On Colab or another Linux GPU runtime, use `--loader-workers 2` to keep the GPU
-fed. On local Windows CPU pilots, leave it at the default `0`.
+fed. `--amp auto` enables mixed precision on CUDA and stays off on CPU. On local
+Windows CPU pilots, leave loader workers at the default `0`.
 
 Compare runs:
 

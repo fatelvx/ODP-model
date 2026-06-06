@@ -201,6 +201,8 @@ def write_run_report(
                 f"<tr><th>Model Config</th><td><code>{html.escape(str(model_config))}</code></td></tr>"
                 f"<tr><th>Evaluation</th><td>{html.escape(str(run_info.get('evaluation', '')))}</td></tr>"
                 f"<tr><th>Feature Set</th><td>{html.escape(str(run_info.get('feature_set', '')))}</td></tr>"
+                f"<tr><th>AMP</th><td>{html.escape(str(run_info.get('amp', '')))}</td></tr>"
+                f"<tr><th>AMP Enabled</th><td>{html.escape(str(run_info.get('amp_enabled', '')))}</td></tr>"
                 f"<tr><th>Split</th><td>{html.escape(str(run_info.get('split_strategy', '')))}</td></tr>"
                 f"<tr><th>Group Column</th><td>{html.escape(str(run_info.get('group_column', '')))}</td></tr>"
                 f"<tr><th>Group Count</th><td>{html.escape(str(run_info.get('group_count', '')))}</td></tr>"

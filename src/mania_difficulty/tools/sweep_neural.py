@@ -217,6 +217,7 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         loader_workers=base_args.loader_workers,
         pin_memory=base_args.pin_memory,
         loader_prefetch_factor=base_args.loader_prefetch_factor,
+        amp=base_args.amp,
         lstm_embed_dim=int(candidate.get("lstm_embed_dim", base_args.lstm_embed_dims[0])),
         lstm_hidden_dim=int(candidate.get("lstm_hidden_dim", base_args.lstm_hidden_dims[0])),
         lstm_layers=int(candidate.get("lstm_layers", base_args.lstm_layers[0])),
@@ -372,6 +373,7 @@ def main() -> None:
     parser.add_argument("--loader-workers", type=int, default=0)
     parser.add_argument("--pin-memory", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--loader-prefetch-factor", type=int, default=2)
+    parser.add_argument("--amp", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--summary-hidden-dims", type=parse_int_list, default=[96, 128, 192])
     parser.add_argument("--summary-dropouts", type=parse_float_list, default=[0.1, 0.2, 0.35])
     parser.add_argument("--lstm-embed-dims", type=parse_int_list, default=[32, 64])

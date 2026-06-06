@@ -28,9 +28,13 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "prediction_summary.csv").write_text(
                 "\n".join(
                     [
-                        "target,count,bias,mae,actual_std,pred_std",
-                        "mean_acc,4,-0.02,0.1,0.04,0.01",
-                        "acc_std,4,0.07,0.08,0.08,0.02",
+                        (
+                            "target,count,bias,mae,median_abs_error,p90_abs_error,"
+                            "max_abs_error,over_prediction_rate,under_prediction_rate,"
+                            "actual_std,pred_std"
+                        ),
+                        "mean_acc,4,-0.02,0.1,0.09,0.11,0.2,0.25,0.75,0.04,0.01",
+                        "acc_std,4,0.07,0.08,0.07,0.22,0.3,0.75,0.25,0.08,0.02",
                     ]
                 ),
                 encoding="utf-8",
@@ -224,12 +228,16 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("calibration_mean_abs_bias", decision_summary)
         self.assertIn("calibration_worst_bias_target", decision_summary)
         self.assertIn("calibration_worst_bias", decision_summary)
+        self.assertIn("calibration_worst_p90_target", decision_summary)
+        self.assertIn("calibration_worst_p90_abs_error", decision_summary)
         self.assertIn("calibration_mean_pred_std_ratio", decision_summary)
         self.assertIn("calibration_warning", decision_summary)
         self.assertIn("acc_std", decision_summary)
         self.assertIn("0.045", decision_summary)
+        self.assertIn("0.22", decision_summary)
         self.assertIn("0.25", decision_summary)
         self.assertIn("Predictions are too compressed", decision_summary)
+        self.assertIn("Tail errors are high", decision_summary)
         self.assertIn("training_adjustment", decision_summary)
         self.assertIn("Increase regularization", decision_summary)
         self.assertIn("Predictions are too compressed", decision_summary)

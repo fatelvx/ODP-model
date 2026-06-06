@@ -60,6 +60,8 @@ DECISION_COLUMNS = [
     "calibration_mean_abs_bias",
     "calibration_worst_bias_target",
     "calibration_worst_bias",
+    "calibration_worst_p90_target",
+    "calibration_worst_p90_abs_error",
     "calibration_mean_pred_std_ratio",
     "calibration_warning",
     "training_adjustment",
@@ -144,6 +146,19 @@ def prediction_calibration_summary(run_dir: Path, evaluation: str) -> dict[str, 
                 abs(float(worst_bias_row["bias"])) / worst_mae
             )
 
+    if "p90_abs_error" in frame.columns:
+        frame["p90_abs_error"] = pd.to_numeric(frame["p90_abs_error"], errors="coerce")
+        tail = frame.dropna(subset=["p90_abs_error"]).copy()
+        if not tail.empty:
+            worst_tail_row = tail.loc[tail["p90_abs_error"].idxmax()]
+            summary["calibration_worst_p90_target"] = str(worst_tail_row["target"])
+            summary["calibration_worst_p90_abs_error"] = float(worst_tail_row["p90_abs_error"])
+            tail_mae = metric_float(worst_tail_row.get("mae"))
+            if tail_mae is not None and tail_mae > 1e-9:
+                summary["calibration_worst_p90_to_mae"] = (
+                    float(worst_tail_row["p90_abs_error"]) / tail_mae
+                )
+
     if {"actual_std", "pred_std"}.issubset(frame.columns):
         frame["actual_std"] = pd.to_numeric(frame["actual_std"], errors="coerce")
         frame["pred_std"] = pd.to_numeric(frame["pred_std"], errors="coerce")
@@ -163,6 +178,7 @@ def prediction_calibration_summary(run_dir: Path, evaluation: str) -> dict[str, 
 
 
 def calibration_warning_text(summary: dict[str, object]) -> str:
+    warnings: list[str] = []
     spread_ratio = metric_float(summary.get("calibration_mean_pred_std_ratio"))
     if spread_ratio is not None and spread_ratio < 0.35:
         target = str(
@@ -170,9 +186,17 @@ def calibration_warning_text(summary: dict[str, object]) -> str:
             or summary.get("calibration_worst_bias_target")
             or "the weakest target"
         )
-        return (
+        warnings.append(
             "Predictions are too compressed toward the mean; inspect "
             f"{target} features, train longer, or raise model capacity."
+        )
+
+    tail_ratio = metric_float(summary.get("calibration_worst_p90_to_mae"))
+    if tail_ratio is not None and tail_ratio >= 2.0:
+        target = str(summary.get("calibration_worst_p90_target") or "the weakest target")
+        warnings.append(
+            f"Tail errors are high on {target}; inspect largest-error maps "
+            "and human review before a longer run."
         )
 
     bias_ratio = metric_float(summary.get("calibration_worst_bias_to_mae"))
@@ -180,11 +204,11 @@ def calibration_warning_text(summary: dict[str, object]) -> str:
         target = str(summary.get("calibration_worst_bias_target") or "the weakest target")
         bias = metric_float(summary.get("calibration_worst_bias"))
         direction = "high" if bias is not None and bias > 0 else "low"
-        return (
+        warnings.append(
             f"{target} predictions are biased {direction}; check label quality "
             "and feature coverage before a longer run."
         )
-    return ""
+    return " ".join(warnings)
 
 
 def audit_label_reliability_html(summary: dict[str, Any]) -> str:
@@ -398,6 +422,14 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
                     "",
                 ),
                 "calibration_worst_bias": calibration.get("calibration_worst_bias", ""),
+                "calibration_worst_p90_target": calibration.get(
+                    "calibration_worst_p90_target",
+                    "",
+                ),
+                "calibration_worst_p90_abs_error": calibration.get(
+                    "calibration_worst_p90_abs_error",
+                    "",
+                ),
                 "calibration_mean_pred_std_ratio": calibration.get(
                     "calibration_mean_pred_std_ratio",
                     "",

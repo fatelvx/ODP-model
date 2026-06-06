@@ -42,8 +42,16 @@ class PredictionSummaryTests(unittest.TestCase):
         self.assertAlmostEqual(summary.loc[0, "pred_mean"], 0.7)
         self.assertAlmostEqual(summary.loc[0, "bias"], 0.0)
         self.assertAlmostEqual(summary.loc[0, "mae"], 0.1)
+        self.assertAlmostEqual(summary.loc[0, "median_abs_error"], 0.1)
+        self.assertAlmostEqual(summary.loc[0, "p90_abs_error"], 0.1)
+        self.assertAlmostEqual(summary.loc[0, "over_prediction_rate"], 0.5)
+        self.assertAlmostEqual(summary.loc[0, "under_prediction_rate"], 0.5)
         self.assertAlmostEqual(summary.loc[1, "bias"], -0.05)
         self.assertAlmostEqual(summary.loc[1, "mae"], 0.15)
+        self.assertAlmostEqual(summary.loc[1, "median_abs_error"], 0.15)
+        self.assertAlmostEqual(summary.loc[1, "p90_abs_error"], 0.19)
+        self.assertAlmostEqual(summary.loc[1, "over_prediction_rate"], 0.5)
+        self.assertAlmostEqual(summary.loc[1, "under_prediction_rate"], 0.5)
         self.assertAlmostEqual(summary.loc[1, "max_abs_error"], 0.2)
 
 

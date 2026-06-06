@@ -639,7 +639,11 @@ def prediction_summary_rows(predictions_csv: Path, target_columns: list[str]) ->
                 "pred_mean": float(predicted.mean()),
                 "bias": float(error.mean()),
                 "mae": float(abs_error.mean()),
+                "median_abs_error": float(abs_error.median()),
+                "p90_abs_error": float(abs_error.quantile(0.9)),
                 "max_abs_error": float(abs_error.max()),
+                "over_prediction_rate": float((error > 0).mean()),
+                "under_prediction_rate": float((error < 0).mean()),
                 "actual_std": float(actual.std(ddof=0)),
                 "pred_std": float(predicted.std(ddof=0)),
             }
@@ -655,7 +659,11 @@ def write_prediction_summary(path: Path, predictions_csv: Path, target_columns: 
         "pred_mean",
         "bias",
         "mae",
+        "median_abs_error",
+        "p90_abs_error",
         "max_abs_error",
+        "over_prediction_rate",
+        "under_prediction_rate",
         "actual_std",
         "pred_std",
     ]

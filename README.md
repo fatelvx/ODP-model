@@ -106,7 +106,7 @@ Each run saves:
 - `learning_curve.png`: loss curve plus validation MAE / pairwise-order curve when available
 - `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, runtime device, baseline wins, and fragile metadata-bin checks
 - `predictions.csv`: actual model outputs on the test split
-- `prediction_summary.csv`: per-target actual mean, predicted mean, bias, MAE, max error, and spread
+- `prediction_summary.csv`: per-target actual mean, predicted mean, bias, MAE, median/p90/max error, over/under-prediction rate, and spread
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently
@@ -413,8 +413,9 @@ are easier to compare. It also includes learning-curve health such as best/final
 validation MAE, best/final pairwise order, overfit signal, average epoch seconds,
 and peak CUDA memory. It also reads `prediction_summary.csv` and
 `cv_prediction_summary.csv` into calibration fields such as mean absolute bias,
-worst biased target, and predicted-vs-actual spread ratio; low spread ratio is a
-warning that the model may be collapsing toward average predictions. The
+worst biased target, worst p90 absolute error, and predicted-vs-actual spread
+ratio; low spread ratio is a warning that the model may be collapsing toward
+average predictions. The
 `training_adjustment` column turns those signals into a conservative next-run
 tuning hint, such as adding regularization, running a small sweep, moving neural
 training to CUDA, raising model capacity when predictions are too compressed, or

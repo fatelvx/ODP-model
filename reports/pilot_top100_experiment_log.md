@@ -354,6 +354,97 @@ Notes:
 - CPU LSTM is too slow for full-length pilot training. Use Colab CUDA for the
   next real sequence model run.
 
+### LSTM CPU m3000 Tiny Calibration Run
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_lstm_cpu_real_m3000_tiny_e3 `
+  --model lstm `
+  --epochs 3 `
+  --batch-size 4 `
+  --grad-accum-steps 4 `
+  --lr 0.001 `
+  --weight-decay 0.0001 `
+  --patience 3 `
+  --checkpoint-metric val_mean_mae `
+  --group-column beatmapset_id `
+  --max-notes 3000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --huber-delta 0.5 `
+  --device cpu `
+  --amp off `
+  --loader-workers 0 `
+  --lstm-embed-dim 8 `
+  --lstm-hidden-dim 16 `
+  --lstm-layers 1 `
+  --lstm-dropout 0.0 `
+  --lstm-head-dropout 0.2 `
+  --seed 42
+```
+
+Truncation audit for this CPU run:
+
+| max_notes | Rows truncated | Truncation rate | Max notes over limit |
+| ---: | ---: | ---: | ---: |
+| 3000 | 14 / 93 | 15.05% | 3414 |
+
+Validation curve:
+
+| Metric | Start | Final |
+| --- | ---: | ---: |
+| Validation mean MAE | 0.02094 | 0.01994 |
+| Validation pairwise order | 50.00% | 55.05% |
+
+Runtime:
+
+| Metric | Value |
+| --- | ---: |
+| Average epoch seconds | 29.29 |
+| Epochs completed | 3 / 3 |
+| Effective batch size | 16 |
+
+Holdout test metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline | MAE improvement vs difficulty rating |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.019138 | -0.0746 | -0.0769 | 46.15% | 13.32% | 15.90% |
+| acc_std | 0.019790 | -0.0435 | 0.4615 | 66.67% | 31.23% | 33.55% |
+| skill_gap | 0.034360 | -0.1082 | -0.2363 | 42.31% | 10.02% | 11.86% |
+
+Comparison against the previous m1200 LSTM and seed-42 forest holdout:
+
+| Run | Mean holdout MAE | Mean R2 | Mean Spearman | Mean Pairwise | Targets beating train-mean baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LSTM m1200 CPU | 0.025743 | -0.1174 | -0.3040 | 40.60% | 3 / 3 |
+| LSTM m3000 tiny CPU | 0.024430 | -0.0754 | 0.0495 | 51.71% | 3 / 3 |
+| Weighted forest seed 42 | 0.029944 | -0.5343 | -0.0092 | 48.72% | 2 / 3 |
+
+Prediction spread check:
+
+| Target | Actual std | Predicted std | Bias | Over-prediction rate |
+| --- | ---: | ---: | ---: | ---: |
+| mean_acc | 0.024237 | 0.000056 | -0.006503 | 15.38% |
+| acc_std | 0.026729 | 0.000089 | 0.005949 | 84.62% |
+| skill_gap | 0.041247 | 0.000114 | 0.013260 | 84.62% |
+
+Notes:
+
+- Raising `max_notes` from 1200 to 3000 and shrinking the model made a CPU
+  sequence run feasible: three epochs completed in about 88 seconds of epoch
+  time.
+- The run improved over the m1200 CPU LSTM on holdout MAE, R2, Spearman, and
+  pairwise order, and beat train-mean/difficulty-rating baselines on all three
+  target MAEs.
+- The predicted standard deviations are still near zero, so the model mostly
+  predicts a narrow average band. This is not ready to promote; it is a useful
+  Colab parameter calibration run for a longer GPU sequence model.
+
 ### Tabular Forest Core
 
 Command:
@@ -836,6 +927,7 @@ Notes:
 - `outputs\runs\pilot_top100_summary_pairwise_sweep_real_summary_h128_do0p1_lr0p001_wd0p0001_bs8_hd0p5\run_report.html`
 - `outputs\runs\pilot_top100_summary_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
+- `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e3\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
@@ -866,8 +958,11 @@ ranking as essentially unchanged. A weighted seed-42 MAE sweep found a
 but the 5-seed stability check did not confirm it: weighted 100-tree averaged
 0.02492 +/- 0.00113 mean MAE and 58.78% +/- 3.68% pairwise order. Keep the
 weighted 200-tree forest as the current comparison baseline.
-Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
-the run is heavily truncated and ranking is weaker than the current baselines.
+Treat the CPU LSTM runs as pipeline/performance calibration, not final quality
+evidence. The m3000 tiny run improved over the m1200 truncated run and produced
+usable learning curves in under two minutes, but its predictions still collapse
+to a near-constant band, so it needs longer Colab/GPU training before it can be
+compared fairly against the tabular baseline.
 
 Next training iteration:
 
@@ -884,7 +979,9 @@ Next training iteration:
 4. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
 5. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
-   and preferably near 7000 if memory allows; CPU full-length LSTM did not
-   finish epoch 1 within 10 minutes.
+   and preferably near 7000 if memory allows. Start from the m3000 tiny CPU
+   calibration only as a speed-safe fallback; on GPU, use a larger sequence
+   model and longer training because the CPU tiny run still collapses to
+   near-constant predictions.
 6. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

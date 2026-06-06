@@ -204,6 +204,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("peak_cuda_memory_mb", decision_summary)
         self.assertIn("Possible", decision_summary)
         self.assertIn("150.0", decision_summary)
+        self.assertIn("training_adjustment", decision_summary)
+        self.assertIn("Increase regularization", decision_summary)
         self.assertIn("Fix acc_std before longer training", decision_summary)
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)

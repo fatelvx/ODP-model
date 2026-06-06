@@ -402,7 +402,10 @@ the generated `Next Action`; it also keeps device, AMP, effective batch size,
 epochs completed, and stop reason visible so Colab GPU runs are easier to
 compare. It also includes learning-curve health such as best/final validation
 MAE, best/final pairwise order, overfit signal, average epoch seconds, and peak
-CUDA memory. If a judgment template has been filled, the summary also shows human
+CUDA memory. The `training_adjustment` column turns those signals into a
+conservative next-run tuning hint, such as adding regularization, running a
+small sweep, moving neural training to CUDA, or lowering batch size when memory
+is tight. If a judgment template has been filled, the summary also shows human
 judgment coverage plus model/proxy agreement rates so runs can be compared
 against manual harder/easier calls. Then use the run cards below it for plots
 and human-review files. The dashboard command also writes

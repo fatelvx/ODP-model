@@ -13,6 +13,7 @@ from mania_difficulty.human_judgments import score_pair_judgments
 from mania_difficulty.tools.compare_runs import run_metrics_rows
 from mania_difficulty.visualize import (
     checkpoint_score_text,
+    metric_float,
     model_verdict_html,
     model_verdict_summary,
     training_health_html,
@@ -55,6 +56,7 @@ DECISION_COLUMNS = [
     "targets_beating_baseline",
     "targets_beating_difficulty_rating",
     "weakest_target",
+    "training_adjustment",
     "next_action",
 ]
 
@@ -297,6 +299,12 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
                     else ""
                 ),
                 "weakest_target": summary.get("weakest_target", ""),
+                "training_adjustment": training_adjustment_text(
+                    summary,
+                    health,
+                    performance,
+                    run_info,
+                ),
                 "next_action": summary.get("next_action", ""),
             }
         )
@@ -323,6 +331,46 @@ def run_decision_frame(run_dirs: list[Path]) -> pd.DataFrame:
 def write_run_decision_summary_csv(run_dirs: list[Path], out_csv: Path) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     run_decision_frame(run_dirs).to_csv(out_csv, index=False, encoding="utf-8")
+
+
+def training_adjustment_text(
+    verdict: dict[str, object],
+    health: dict[str, object],
+    performance: dict[str, object],
+    run_info: dict[str, object],
+) -> str:
+    notes: list[str] = []
+    if str(health.get("overfit_signal", "")).lower() == "possible":
+        notes.append(
+            "Increase regularization or reduce patience/epochs before a longer run."
+        )
+
+    pairwise = metric_float(verdict.get("mean_pairwise_order_accuracy"))
+    if pairwise is not None and pairwise < 0.55:
+        notes.append("Improve labels/human judgments before spending more GPU time.")
+    elif pairwise is not None and pairwise < 0.70:
+        notes.append("Run a small LR/dropout/hidden-size sweep before final training.")
+
+    model_name = str(run_info.get("model_name", "")).lower()
+    device = str(run_info.get("device", "")).lower()
+    if device == "cpu" and model_name not in {"tabular_forest", "forest"}:
+        notes.append("Move neural training to CUDA/Colab for the next real run.")
+
+    peak_memory = metric_float(performance.get("peak_cuda_memory_mb"))
+    if peak_memory is not None and peak_memory >= 14000:
+        notes.append("Lower batch size or raise grad_accum_steps to protect CUDA memory.")
+
+    avg_epoch_seconds = metric_float(performance.get("average_epoch_seconds"))
+    if avg_epoch_seconds is not None and avg_epoch_seconds >= 120:
+        notes.append("Limit sweep candidates or lower max-notes if iteration is too slow.")
+
+    downweighted_rate = metric_float(run_info.get("sample_weight_train_downweighted_rate"))
+    if downweighted_rate is not None and downweighted_rate >= 0.50:
+        notes.append("Review low score-count labels before trusting a long weighted run.")
+
+    if notes:
+        return " ".join(notes)
+    return "Keep these settings as a baseline and compare the next run against it."
 
 
 def human_judgment_summary_by_evaluation(run_dir: Path) -> dict[str, dict[str, object]]:

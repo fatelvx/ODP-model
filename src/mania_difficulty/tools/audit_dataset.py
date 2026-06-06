@@ -17,6 +17,11 @@ import pandas as pd
 from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
 
 
+MIN_USABLE_ROWS_FOR_REAL_TRAINING = 100
+MIN_FULL_TOP100_RATE = 0.8
+MAX_LOW_SCORE_COUNT_RATE = 0.25
+
+
 def numeric_summary(values: list[float]) -> dict[str, float | int]:
     if not values:
         return {"count": 0, "min": 0.0, "median": 0.0, "mean": 0.0, "max": 0.0, "std": 0.0}
@@ -60,6 +65,81 @@ def label_reliability_summary(
         "min_score_count": float(scores.min()),
         "median_score_count": float(scores.median()),
     }
+
+
+def quality_warning(code: str, message: str, severity: str = "warning") -> dict[str, str]:
+    return {"code": code, "severity": severity, "message": message}
+
+
+def dataset_quality_warnings(summary: dict[str, Any]) -> list[dict[str, str]]:
+    warnings: list[dict[str, str]] = []
+    missing_sequence_count = int(summary.get("missing_sequence_count", 0) or 0)
+    if missing_sequence_count:
+        warnings.append(
+            quality_warning(
+                "missing_sequences",
+                f"{missing_sequence_count} labels are missing parsed note sequences and cannot be trained.",
+            )
+        )
+
+    target_missing = summary.get("target_missing", [])
+    if target_missing:
+        warnings.append(
+            quality_warning(
+                "missing_targets",
+                f"Missing target columns: {', '.join(str(column) for column in target_missing)}.",
+                severity="error",
+            )
+        )
+
+    usable_rows = int(summary.get("usable_rows", 0) or 0)
+    if usable_rows < MIN_USABLE_ROWS_FOR_REAL_TRAINING:
+        warnings.append(
+            quality_warning(
+                "small_usable_dataset",
+                (
+                    f"Only {usable_rows} usable maps are available; use this for smoke tests, "
+                    "not final model comparison."
+                ),
+            )
+        )
+
+    duplicate_count = int(summary.get("duplicate_beatmap_id_count", 0) or 0)
+    if duplicate_count:
+        warnings.append(
+            quality_warning(
+                "duplicate_beatmap_ids",
+                f"{duplicate_count} duplicate beatmap_id rows were found; deduplicate labels before training.",
+            )
+        )
+
+    reliability = summary.get("label_reliability", {})
+    if isinstance(reliability, dict) and reliability.get("score_count_available"):
+        full_top100_rate = float(reliability.get("full_top100_rate", 0.0) or 0.0)
+        if full_top100_rate < MIN_FULL_TOP100_RATE:
+            warnings.append(
+                quality_warning(
+                    "low_full_top100_rate",
+                    (
+                        f"Only {full_top100_rate:.2%} of usable maps have full top100 score coverage; "
+                        "keep sample weighting on and verify with human judgments."
+                    ),
+                )
+            )
+        low_score_count_rate = float(reliability.get("low_score_count_rate", 0.0) or 0.0)
+        if low_score_count_rate > MAX_LOW_SCORE_COUNT_RATE:
+            threshold = reliability.get("low_score_count_threshold", "")
+            warnings.append(
+                quality_warning(
+                    "high_low_score_count_rate",
+                    (
+                        f"{low_score_count_rate:.2%} of usable maps are below score_count {threshold}; "
+                        "labels may be noisy."
+                    ),
+                )
+            )
+
+    return warnings
 
 
 def audit_dataset(
@@ -130,6 +210,7 @@ def audit_dataset(
         "label_reliability": label_reliability_summary(usable),
         "targets": target_stats,
     }
+    summary["quality_warnings"] = dataset_quality_warnings(summary)
     return summary, missing_rows
 
 
@@ -247,6 +328,30 @@ def label_reliability_table(summary: dict[str, Any]) -> str:
     return f"<h2>Label Reliability</h2><table><tbody>{row_html}</tbody></table>"
 
 
+def quality_warnings_table(summary: dict[str, Any]) -> str:
+    warnings = summary.get("quality_warnings", [])
+    if not isinstance(warnings, list) or not warnings:
+        return ""
+    rows = []
+    for warning in warnings:
+        if not isinstance(warning, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(warning.get('severity', 'warning')))}</td>"
+            f"<td><code>{html.escape(str(warning.get('code', '')))}</code></td>"
+            f"<td>{html.escape(str(warning.get('message', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        "<h2>Dataset Quality Warnings</h2>"
+        "<table><thead><tr><th>Severity</th><th>Code</th><th>Message</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def write_html_report(summary: dict[str, Any], out_dir: Path) -> None:
     target_missing = ", ".join(summary["target_missing"]) if summary["target_missing"] else "none"
     sequence_stats = {"sequence_length": summary["sequence_length"]}
@@ -269,6 +374,7 @@ def write_html_report(summary: dict[str, Any], out_dir: Path) -> None:
   <h1>Dataset Audit</h1>
   <p>Target columns missing: <code>{html.escape(target_missing)}</code></p>
   {summary_table(summary)}
+  {quality_warnings_table(summary)}
   {label_reliability_table(summary)}
   {stats_table("Target Distributions", summary["targets"])}
   {stats_table("Sequence Length", sequence_stats)}

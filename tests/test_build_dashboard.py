@@ -140,6 +140,13 @@ class BuildDashboardTests(unittest.TestCase):
                         "usable_rows": 10,
                         "missing_sequence_count": 1,
                         "group_count": 3,
+                        "quality_warnings": [
+                            {
+                                "code": "low_full_top100_rate",
+                                "severity": "warning",
+                                "message": "Only 60.00% of usable maps have full top100 score coverage.",
+                            }
+                        ],
                         "label_reliability": {
                             "score_count_available": True,
                             "usable_score_count_rows": 10,
@@ -193,6 +200,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("60.00%", html)
         self.assertIn("Low Score Count Rate", html)
         self.assertIn("20.00%", html)
+        self.assertIn("Dataset Quality Warnings", html)
+        self.assertIn("low_full_top100_rate", html)
+        self.assertIn("Only 60.00%", html)
         self.assertIn("best_forest", html)
         self.assertIn("Run Decision Summary", html)
         self.assertIn("run_decision_summary.csv", html)

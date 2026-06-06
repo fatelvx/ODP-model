@@ -59,6 +59,11 @@ class AuditDatasetTests(unittest.TestCase):
         self.assertEqual(summary["label_reliability"]["low_score_count_threshold"], 80)
         self.assertEqual(summary["label_reliability"]["low_score_count_rows"], 1)
         self.assertAlmostEqual(summary["label_reliability"]["low_score_count_rate"], 0.5)
+        warning_codes = {warning["code"] for warning in summary["quality_warnings"]}
+        self.assertIn("missing_sequences", warning_codes)
+        self.assertIn("small_usable_dataset", warning_codes)
+        self.assertIn("low_full_top100_rate", warning_codes)
+        self.assertIn("high_low_score_count_rate", warning_codes)
         self.assertEqual(missing[0]["beatmap_id"], 3)
 
     def test_audit_html_report_includes_label_reliability(self):
@@ -75,6 +80,13 @@ class AuditDatasetTests(unittest.TestCase):
                 "targets": {},
                 "sequence_length": {"count": 2, "min": 5, "median": 7, "mean": 7, "max": 9, "std": 2},
                 "score_count": {"count": 2, "min": 70, "median": 85, "mean": 85, "max": 100, "std": 15},
+                "quality_warnings": [
+                    {
+                        "code": "low_full_top100_rate",
+                        "severity": "warning",
+                        "message": "Only 50.00% of usable maps have full top100 score coverage.",
+                    }
+                ],
                 "label_reliability": {
                     "score_count_available": True,
                     "low_score_count_threshold": 80,
@@ -91,6 +103,9 @@ class AuditDatasetTests(unittest.TestCase):
         self.assertIn("Label Reliability", html)
         self.assertIn("Full Top100 Rate", html)
         self.assertIn("Low Score Count Rate", html)
+        self.assertIn("Dataset Quality Warnings", html)
+        self.assertIn("low_full_top100_rate", html)
+        self.assertIn("Only 50.00%", html)
 
 
 if __name__ == "__main__":

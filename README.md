@@ -208,7 +208,10 @@ The audit writes `dataset_audit.json`, `missing_sequences.csv`,
 `dataset_distributions.png`, and `dataset_audit.html` so we can catch missing
 parsed files, weak label coverage, or narrow target distributions before
 spending GPU time. The audit also reports Label Reliability from `score_count`,
-including the full top100 rate and maps below the low-score threshold.
+including the full top100 rate and maps below the low-score threshold. Its
+`quality_warnings` section calls out missing sequences, very small usable
+datasets, low full-top100 coverage, and high low-score-count rates so Colab runs
+can be paused for data cleanup before spending GPU time.
 
 Train a small-data forest baseline:
 
@@ -421,6 +424,8 @@ python -m mania_difficulty.tools.build_dashboard `
 ```
 
 Start with the dashboard's `Run Decision Summary` table when comparing runs.
+The dashboard also repeats dataset audit quality warnings, so data coverage
+problems stay visible next to the run outputs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
 the generated `Next Action`; it also keeps device, AMP, effective batch size,
 gradient clip norm, Huber delta, epochs completed, and stop reason visible so

@@ -244,6 +244,30 @@ def audit_label_reliability_html(summary: dict[str, Any]) -> str:
     return f"<h3>Label Reliability</h3><table><tbody>{''.join(rows)}</tbody></table>"
 
 
+def audit_quality_warnings_html(summary: dict[str, Any]) -> str:
+    warnings = summary.get("quality_warnings", [])
+    if not isinstance(warnings, list) or not warnings:
+        return ""
+    rows = []
+    for warning in warnings:
+        if not isinstance(warning, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(warning.get('severity', 'warning')))}</td>"
+            f"<td><code>{html.escape(str(warning.get('code', '')))}</code></td>"
+            f"<td>{html.escape(str(warning.get('message', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        "<h3>Dataset Quality Warnings</h3>"
+        "<table><thead><tr><th>Severity</th><th>Code</th><th>Message</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def audit_section(audit_dir: Path | None, out_html: Path) -> str:
     if not audit_dir or not audit_dir.exists():
         return ""
@@ -267,6 +291,7 @@ def audit_section(audit_dir: Path | None, out_html: Path) -> str:
     return (
         "<section><h2>Dataset Audit</h2>"
         f"<table><tbody>{''.join(rows)}</tbody></table>"
+        f"{audit_quality_warnings_html(summary)}"
         f"{audit_label_reliability_html(summary)}"
         f"<p>{links}</p>"
         f"{image(audit_dir / 'dataset_distributions.png', 'Dataset distributions', out_html)}"

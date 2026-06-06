@@ -244,7 +244,83 @@ Notes:
 
 - Core forest is weaker than summary on the tiny holdout MAE, but CV is much
   healthier: positive R2 for every target and around 64% pairwise ordering.
-- This is the best small-data ranking baseline so far.
+- This was the best small-data ranking baseline before the pairwise sweep below.
+
+### Tabular Forest Pairwise Sweep
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.tools.sweep_forest `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --out-dir outputs\forest_sweep_pilot_top100_pairwise_real `
+  --max-notes 7000 `
+  --group-column beatmapset_id `
+  --cv-folds 5 `
+  --seed 42 `
+  --trees 200,500,800 `
+  --min-samples-leaf 1,2,4 `
+  --max-features sqrt,0.75,1.0 `
+  --feature-sets core,burst `
+  --selection-metric mean_pairwise_order_accuracy `
+  --workers -1
+```
+
+Best sweep candidate:
+
+| Candidate | Feature Set | Trees | Leaf | Max Features | Mean MAE | Mean R2 | Mean Spearman | Mean Pairwise | Mean Improvement |
+| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| core_trees200_leaf2_featsqrt | core | 200 | 2 | sqrt | 0.023484 | 0.1166 | 0.4494 | 65.13% | 13.44% |
+
+Top sweep rows by pairwise order:
+
+| Candidate | Mean MAE | Mean R2 | Mean Spearman | Mean Pairwise |
+| --- | ---: | ---: | ---: | ---: |
+| core_trees200_leaf2_featsqrt | 0.023484 | 0.1166 | 0.4494 | 65.13% |
+| core_trees500_leaf2_featsqrt | 0.023816 | 0.1025 | 0.4097 | 63.79% |
+| core_trees800_leaf2_featsqrt | 0.023877 | 0.0960 | 0.4020 | 63.64% |
+| core_trees200_leaf1_featsqrt | 0.024178 | 0.0891 | 0.3918 | 63.46% |
+| core_trees800_leaf2_feat0.75 | 0.024122 | 0.0490 | 0.3941 | 63.44% |
+
+Best-params training command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_forest_core_pairwise_best_real `
+  --model tabular_forest `
+  --feature-set core `
+  --forest-trees 200 `
+  --forest-min-samples-leaf 2 `
+  --forest-max-features sqrt `
+  --cv-folds 5 `
+  --group-column beatmapset_id `
+  --max-notes 7000 `
+  --workers -1 `
+  --seed 42
+```
+
+Best-params 5-fold grouped out-of-fold metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.017443 | 0.1095 | 0.4729 | 65.97% | 12.28% |
+| acc_std | 0.023182 | 0.1331 | 0.4170 | 64.07% | 15.42% |
+| skill_gap | 0.029827 | 0.1070 | 0.4584 | 65.36% | 12.63% |
+
+Notes:
+
+- The pairwise sweep improved the small-data forest ranking baseline from
+  63.79% to 65.13% mean pairwise order and reduced mean CV MAE from 0.02382 to
+  0.02348.
+- The best setting is smaller than the previous 500-tree baseline: 200 trees,
+  leaf 2, `sqrt` features, core feature set.
+- Top feature importances in the best model start with `notes_per_sec`,
+  `delta_p90`, `ln_ratio`, `short_gap_50ms_ratio`, and `delta_p50`.
+- Fold 5 remains weak and slightly negative-rank, so this is an incremental
+  pilot improvement, not final evidence of model quality.
 
 ### Tabular Forest Burst
 
@@ -286,10 +362,12 @@ Notes:
 - `outputs\pilot_top100_real_comparison.html`
 - `outputs\pilot_top100_real_comparison.csv`
 - `outputs\pilot_top100_real_decision_summary.csv`
+- `outputs\forest_sweep_pilot_top100_pairwise_real\sweep_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_clean\run_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_m7000\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
 ## Current Decision
@@ -299,14 +377,16 @@ split, but its ranking signal is weak and predictions are compressed.
 The m7000 summary check did not beat the m3000 summary run on MAE, so raising
 `MAX_NOTES` is not automatically helpful for the summary model.
 
-Use `pilot_top100_forest_core_real` as the current small-data ranking baseline,
-because the 5-fold grouped CV result is more stable than the tiny 13-map holdout.
+Use `pilot_top100_forest_core_pairwise_best_real` as the current small-data
+ranking baseline, because the pairwise sweep improved grouped CV ranking and
+MAE while using fewer trees than the previous core forest.
 Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
 the run is heavily truncated and ranking is weaker than the current baselines.
 
 Next training iteration:
 
-1. Prefer `feature-set=core` for tabular pilot comparisons.
+1. Prefer `feature-set=core`, 200 trees, leaf 2, and `sqrt` max features for
+   tabular pilot comparisons.
 2. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
 3. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`

@@ -12,7 +12,12 @@ from torch.utils.data import DataLoader
 from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
-from mania_difficulty.train import evaluate_loader, write_predictions
+from mania_difficulty.train import (
+    evaluate_loader,
+    write_human_review,
+    write_pairwise_review,
+    write_predictions,
+)
 from mania_difficulty.visualize import plot_prediction_scatter, write_run_report
 
 
@@ -63,6 +68,8 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     predictions_csv = out_dir / "eval_predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+    write_human_review(out_dir / "eval_human_review.csv", args.labels, predictions_csv, target_columns)
+    write_pairwise_review(out_dir / "eval_human_pair_review.csv", args.labels, predictions_csv)
     metrics = regression_report(actual, pred, target_columns)
     metrics_path = out_dir / "eval_metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")

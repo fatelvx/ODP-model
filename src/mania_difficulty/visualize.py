@@ -89,6 +89,60 @@ def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
     )
 
 
+def csv_preview_html(path: Path, title: str, description: str, *, max_rows: int = 20) -> str:
+    if not path.exists():
+        return ""
+    frame = pd.read_csv(path)
+    if frame.empty:
+        return (
+            f"<h2>{html.escape(title)}</h2>"
+            f"<p>{html.escape(description)}</p>"
+            f"<p><code>{html.escape(path.name)}</code> has no rows for this run.</p>"
+        )
+    table = frame.head(max_rows).to_html(index=False, float_format=lambda value: f"{value:.6f}")
+    return (
+        f"<h2>{html.escape(title)}</h2>"
+        f"<p>{html.escape(description)}</p>"
+        f'<div class="table-wrap">{table}</div>'
+    )
+
+
+def review_sections_html(run_dir: Path) -> str:
+    sections = [
+        csv_preview_html(
+            run_dir / "human_review.csv",
+            "Human Review",
+            "Maps that are useful to inspect by hand: lowest predicted accuracy, lowest observed accuracy, and largest disagreement.",
+        ),
+        csv_preview_html(
+            run_dir / "human_pair_review.csv",
+            "Pairwise Human Review",
+            "Pairs where the model and the top100 proxy disagree about which map is harder.",
+        ),
+        csv_preview_html(
+            run_dir / "cv_human_review.csv",
+            "Cross-Validation Human Review",
+            "Out-of-fold maps worth checking by hand.",
+        ),
+        csv_preview_html(
+            run_dir / "cv_human_pair_review.csv",
+            "Cross-Validation Pairwise Human Review",
+            "Out-of-fold map pairs where the model and proxy rank difficulty in opposite directions.",
+        ),
+        csv_preview_html(
+            run_dir / "eval_human_review.csv",
+            "Evaluation Human Review",
+            "Maps worth checking by hand for this checkpoint evaluation.",
+        ),
+        csv_preview_html(
+            run_dir / "eval_human_pair_review.csv",
+            "Evaluation Pairwise Human Review",
+            "Checkpoint evaluation pairs where the model and proxy rank difficulty in opposite directions.",
+        ),
+    ]
+    return "".join(section for section in sections if section)
+
+
 def write_run_report(
     run_dir: Path,
     *,
@@ -148,6 +202,7 @@ def write_run_report(
         if feature_importance_name and (run_dir / feature_importance_name).exists()
         else ""
     )
+    review_html = review_sections_html(run_dir)
 
     report = f"""<!doctype html>
 <html lang="en">
@@ -158,6 +213,7 @@ def write_run_report(
     body {{ font-family: Arial, sans-serif; margin: 32px; color: #1f2933; }}
     h1, h2 {{ margin-bottom: 8px; }}
     img {{ max-width: 100%; border: 1px solid #d9e2ec; }}
+    .table-wrap {{ overflow-x: auto; max-width: 100%; }}
     table {{ border-collapse: collapse; margin: 12px 0 24px; }}
     th, td {{ border: 1px solid #bcccdc; padding: 8px 12px; text-align: right; }}
     th:first-child, td:first-child {{ text-align: left; }}
@@ -176,9 +232,11 @@ def write_run_report(
   <h2>Predicted vs Observed Proxy</h2>
   {scatter_html}
   {f"<h2>Feature Importance</h2>{feature_importance_html}" if feature_importance_html else ""}
+  {review_html}
   <h2>Files</h2>
   <p>Open <code>predictions.csv</code> to inspect the model output map by map.</p>
   <p>Open <code>human_review.csv</code> for maps that need human judgment.</p>
+  <p>Open <code>human_pair_review.csv</code> to compare map pairs where the ranking disagrees.</p>
 </body>
 </html>
 """

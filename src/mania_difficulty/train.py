@@ -308,6 +308,107 @@ def write_human_review(
     review.to_csv(path, index=False, encoding="utf-8")
 
 
+def clean_review_value(value: object) -> object:
+    if pd.isna(value):
+        return ""
+    return value
+
+
+def pair_review_fields(target_column: str) -> list[str]:
+    return [
+        "review_reason",
+        "model_harder_beatmap_id",
+        "model_harder_title",
+        "model_harder_artist",
+        "model_harder_mapper",
+        "model_harder_version",
+        f"model_harder_pred_{target_column}",
+        f"model_harder_observed_{target_column}",
+        "observed_harder_beatmap_id",
+        "observed_harder_title",
+        "observed_harder_artist",
+        "observed_harder_mapper",
+        "observed_harder_version",
+        f"observed_harder_pred_{target_column}",
+        f"observed_harder_observed_{target_column}",
+        "predicted_acc_gap_model_minus_observed",
+        "observed_acc_gap_model_minus_observed",
+        "disagreement_strength",
+    ]
+
+
+def pair_review_side(row: pd.Series, prefix: str, target_column: str) -> dict[str, object]:
+    return {
+        f"{prefix}_beatmap_id": int(row["beatmap_id"]),
+        f"{prefix}_title": clean_review_value(row.get("title", "")),
+        f"{prefix}_artist": clean_review_value(row.get("artist", "")),
+        f"{prefix}_mapper": clean_review_value(row.get("mapper", "")),
+        f"{prefix}_version": clean_review_value(row.get("version", "")),
+        f"{prefix}_pred_{target_column}": float(row[f"pred_{target_column}"]),
+        f"{prefix}_observed_{target_column}": float(row[f"actual_{target_column}"]),
+    }
+
+
+def write_pairwise_review(
+    path: Path,
+    labels_csv: Path,
+    predictions_csv: Path,
+    *,
+    target_column: str = "mean_acc",
+    top_n: int = 20,
+    min_abs_pred_gap: float = 0.0,
+    min_abs_actual_gap: float = 0.0,
+) -> None:
+    actual_column = f"actual_{target_column}"
+    pred_column = f"pred_{target_column}"
+    predictions = pd.read_csv(predictions_csv)
+    fieldnames = pair_review_fields(target_column)
+    if actual_column not in predictions.columns or pred_column not in predictions.columns:
+        pd.DataFrame(columns=fieldnames).to_csv(path, index=False, encoding="utf-8")
+        return
+
+    labels = pd.read_csv(labels_csv)
+    merged = predictions.merge(labels, on="beatmap_id", how="left", suffixes=("", "_label"))
+    rows = []
+    for left_index in range(len(merged)):
+        for right_index in range(left_index + 1, len(merged)):
+            left = merged.iloc[left_index]
+            right = merged.iloc[right_index]
+            pred_gap = float(left[pred_column] - right[pred_column])
+            actual_gap = float(left[actual_column] - right[actual_column])
+            if not np.isfinite(pred_gap) or not np.isfinite(actual_gap):
+                continue
+            if abs(pred_gap) < min_abs_pred_gap or abs(actual_gap) < min_abs_actual_gap:
+                continue
+            if pred_gap == 0.0 or actual_gap == 0.0 or np.sign(pred_gap) == np.sign(actual_gap):
+                continue
+
+            if pred_gap < 0:
+                model_harder = left
+                observed_harder = right
+            else:
+                model_harder = right
+                observed_harder = left
+
+            model_pred_gap = float(model_harder[pred_column] - observed_harder[pred_column])
+            model_actual_gap = float(model_harder[actual_column] - observed_harder[actual_column])
+            rows.append(
+                {
+                    "review_reason": "pairwise_rank_disagreement",
+                    **pair_review_side(model_harder, "model_harder", target_column),
+                    **pair_review_side(observed_harder, "observed_harder", target_column),
+                    "predicted_acc_gap_model_minus_observed": model_pred_gap,
+                    "observed_acc_gap_model_minus_observed": model_actual_gap,
+                    "disagreement_strength": abs(model_pred_gap) + abs(model_actual_gap),
+                }
+            )
+
+    frame = pd.DataFrame(rows, columns=fieldnames)
+    if not frame.empty:
+        frame = frame.sort_values("disagreement_strength", ascending=False).head(top_n)
+    frame.to_csv(path, index=False, encoding="utf-8")
+
+
 def tabular_arrays(
     dataset: ManiaDifficultyDataset,
     indices: list[int],
@@ -438,6 +539,13 @@ def write_tabular_cross_validation(
         target_columns,
         top_n=20,
     )
+    write_pairwise_review(
+        run_dir / "cv_human_pair_review.csv",
+        args.labels,
+        cv_predictions_csv,
+        target_column="mean_acc",
+        top_n=30,
+    )
 
     cv_metrics = regression_report(y_all, oof_pred, target_columns, baseline_pred=oof_baseline)
     cv_metrics["_run"] = {
@@ -517,6 +625,7 @@ def train_tabular_forest(
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, y_test, test_pred, target_columns)
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
+    write_pairwise_review(run_dir / "human_pair_review.csv", args.labels, predictions_csv)
 
     baseline_pred = repeat_baseline(y_test, y_train.mean(axis=0))
     metrics = regression_report(y_test, test_pred, target_columns, baseline_pred=baseline_pred)
@@ -696,6 +805,7 @@ def train(args: argparse.Namespace) -> Path:
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
+    write_pairwise_review(run_dir / "human_pair_review.csv", args.labels, predictions_csv)
 
     baseline_pred = repeat_baseline(actual, target_mean_np)
     metrics = regression_report(actual, pred, target_columns, baseline_pred=baseline_pred)

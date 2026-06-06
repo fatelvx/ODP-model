@@ -721,8 +721,72 @@ Notes:
   seed-42 CV MAE and R2 without changing pairwise order meaningfully.
 - The holdout split for the best candidate is still noisy and loses to simple
   baselines, so this is only a seed-42 CV tuning candidate.
-- Before promoting the 100-tree setting, run the same multi-seed stability check
-  used for the 200-tree weighted forest.
+- The next section checks whether that seed-42 result survives a multi-seed
+  stability run.
+
+### Tabular Forest Weighted 100-Tree Seed Stability
+
+Command:
+
+```powershell
+$seeds = 7,13,42,99,123
+foreach ($seed in $seeds) {
+  .\.venv\Scripts\python.exe -m mania_difficulty.train `
+    --labels data\processed\labels_pilot_top100.csv `
+    --sequences data\processed\sequences_pilot `
+    --run-name "pilot_top100_forest_core_weighted100_stability_seed${seed}_real" `
+    --model tabular_forest `
+    --feature-set core `
+    --forest-trees 100 `
+    --forest-min-samples-leaf 2 `
+    --forest-max-features sqrt `
+    --cv-folds 5 `
+    --group-column beatmapset_id `
+    --max-notes 7000 `
+    --sample-weight-column score_count `
+    --sample-weight-min 0.25 `
+    --sample-weight-max-value 100 `
+    --workers -1 `
+    --seed $seed
+}
+```
+
+5-seed grouped out-of-fold stability, averaged across the three targets:
+
+| Seed | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement | Targets beating train-mean baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.025803 | -0.0326 | 0.2190 | 57.00% | 6.39% | 3 / 3 |
+| 13 | 0.024175 | 0.0750 | 0.3700 | 61.67% | 11.73% | 3 / 3 |
+| 42 | 0.023064 | 0.1016 | 0.4303 | 64.49% | 14.96% | 3 / 3 |
+| 99 | 0.025499 | -0.0507 | 0.1609 | 55.19% | 7.20% | 3 / 3 |
+| 123 | 0.026067 | -0.0732 | 0.1695 | 55.53% | 7.03% | 3 / 3 |
+
+Weighted 100-tree versus weighted 200-tree stability:
+
+| Run family | Seeds | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Weighted 200-tree | 5 | 0.024802 +/- 0.000913 | 0.0066 +/- 0.0586 | 0.2717 +/- 0.0965 | 58.80% +/- 3.28% | 9.89% +/- 2.62% |
+| Weighted 100-tree | 5 | 0.024921 +/- 0.001134 | 0.0040 +/- 0.0705 | 0.2699 +/- 0.1098 | 58.78% +/- 3.68% | 9.47% +/- 3.34% |
+
+Seed-by-seed delta for weighted 100-tree minus weighted 200-tree:
+
+| Seed | MAE delta | Spearman delta | Pairwise delta | Improvement delta |
+| ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.000198 | -0.0037 | -0.24% | -0.70% |
+| 13 | -0.000240 | 0.0408 | 1.25% | 0.88% |
+| 42 | -0.000125 | -0.0027 | 0.03% | 0.44% |
+| 99 | 0.000257 | -0.0116 | -0.42% | -0.94% |
+| 123 | 0.000508 | -0.0317 | -0.72% | -1.79% |
+
+Notes:
+
+- The 100-tree candidate was better for seed 42, but the 5-seed average does
+  not beat the weighted 200-tree stability baseline.
+- Weighted 100-tree also has wider seed-to-seed variation on MAE, R2,
+  Spearman, pairwise order, and improvement percentage.
+- Keep the weighted 200-tree forest as the current small-data tabular baseline;
+  treat the 100-tree result as a useful warning against promoting a single-seed
+  tuning win.
 
 ### Tabular Forest Burst
 
@@ -778,6 +842,7 @@ Notes:
 - `outputs\runs\pilot_top100_forest_core_pairwise_weighted_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_weighted_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_weighted_mae_best_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_weighted100_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
 ## Current Decision
@@ -798,8 +863,9 @@ weighting improves this to 0.02480 +/- 0.00091 mean MAE and 58.80% +/- 3.28%
 pairwise order, so use weighting for reliability/MAE comparisons while treating
 ranking as essentially unchanged. A weighted seed-42 MAE sweep found a
 100-tree candidate with slightly better CV MAE than the weighted 200-tree run,
-but it still needs multi-seed validation before replacing the stable 200-tree
-comparison baseline.
+but the 5-seed stability check did not confirm it: weighted 100-tree averaged
+0.02492 +/- 0.00113 mean MAE and 58.78% +/- 3.68% pairwise order. Keep the
+weighted 200-tree forest as the current comparison baseline.
 Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
 the run is heavily truncated and ranking is weaker than the current baselines.
 
@@ -809,8 +875,9 @@ Next training iteration:
    tabular pilot comparisons, but report multi-seed CV averages instead of a
    single seed 42 score. Enable `score_count` weighting when the comparison is
    about MAE/reliability rather than pure rank order.
-2. Run a multi-seed stability check for the weighted 100-tree candidate before
-   adopting it over the current weighted 200-tree baseline.
+2. Do not adopt the weighted 100-tree candidate on the current 93-map pilot
+   dataset; it is slightly worse and less stable than weighted 200-tree across
+   five seeds.
 3. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
    effective batch size 16 as a local smoke/tuning baseline only; require
    multi-seed or grouped-CV evidence before trusting summary quality.

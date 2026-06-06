@@ -100,6 +100,11 @@ Open the generated report:
 start outputs/runs/synthetic_smoke/run_report.html
 ```
 
+Real pilot top100 experiment notes are tracked in
+[`reports/pilot_top100_experiment_log.md`](reports/pilot_top100_experiment_log.md).
+That log summarizes the local 93-map top100 audit, summary CPU training run,
+forest core/burst runs, and current next training decision.
+
 Each run saves:
 
 - `history.csv`: train/val loss, validation MAE, validation pairwise order, epoch seconds, LR, and CUDA peak memory per epoch

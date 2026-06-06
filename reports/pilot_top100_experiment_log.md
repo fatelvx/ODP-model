@@ -216,6 +216,73 @@ Notes:
 - Keep `pilot_top100_forest_core_pairwise_best_real` as the stronger ranking
   baseline because it has 5-fold grouped out-of-fold pairwise order near 65%.
 
+### Summary CPU Seed Stability Check
+
+Command shape:
+
+```powershell
+$seeds = 7,13,42,99,123
+foreach ($seed in $seeds) {
+  .\.venv\Scripts\python.exe -m mania_difficulty.train `
+    --labels data\processed\labels_pilot_top100.csv `
+    --sequences data\processed\sequences_pilot `
+    --run-name "pilot_top100_summary_stability_seed${seed}_real" `
+    --model summary `
+    --epochs 16 `
+    --patience 5 `
+    --batch-size 8 `
+    --grad-accum-steps 2 `
+    --checkpoint-metric val_mean_mae `
+    --max-notes 3000 `
+    --group-column beatmapset_id `
+    --sample-weight-column score_count `
+    --sample-weight-min 0.25 `
+    --sample-weight-max-value 100 `
+    --huber-delta 0.5 `
+    --lr 0.001 `
+    --weight-decay 0.0001 `
+    --summary-hidden-dim 128 `
+    --summary-dropout 0.1 `
+    --device cpu `
+    --amp off `
+    --workers -1 `
+    --seed $seed
+}
+```
+
+5-seed holdout stability:
+
+| Seed | Mean MAE | Mean R2 | Mean Pairwise | Mean Improvement | Targets beating baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.034483 | -0.6818 | 44.12% | -8.30% | 0 / 3 |
+| 13 | 0.017388 | -3.6261 | 66.67% | 32.66% | 3 / 3 |
+| 42 | 0.019872 | 0.0000 | 51.71% | 33.28% | 3 / 3 |
+| 99 | 0.034943 | -1.3458 | 50.00% | -12.72% | 0 / 3 |
+| 123 | 0.019528 | -0.1015 | 45.32% | 31.03% | 3 / 3 |
+| Mean +/- std | 0.025243 +/- 0.007780 | -1.1510 +/- 1.3274 | 51.56% +/- 8.06% | 15.19% +/- 21.04% | - |
+
+Validation stability signals:
+
+| Seed | Best validation MAE | Best validation pairwise | Epochs completed | Stop reason |
+| ---: | ---: | ---: | ---: | --- |
+| 7 | 0.020968 | 61.11% | 11 | early_stopping |
+| 13 | 0.032524 | 88.89% | 7 | early_stopping |
+| 42 | 0.013813 | 78.79% | 16 | completed |
+| 99 | 0.014738 | 88.89% | 6 | early_stopping |
+| 123 | 0.028251 | 54.07% | 12 | early_stopping |
+
+Notes:
+
+- This stability check contradicts the optimistic single-split summary result:
+  the same parameters swing from useful MAE to worse-than-baseline across
+  different group splits.
+- Validation pairwise can look excellent while holdout MAE/R2 collapses, so
+  single-split validation curves are not enough evidence for model quality on
+  93 maps.
+- The summary tuning is still useful as a local smoke/performance baseline, but
+  it should not drive final model choices without grouped CV, more labels, or
+  human judgments.
+
 ### LSTM CPU Feasibility Run
 
 Full-length CPU attempt:
@@ -497,6 +564,7 @@ Notes:
 - `outputs\runs\pilot_top100_summary_cpu_real_clean\run_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_m7000\run_report.html`
 - `outputs\runs\pilot_top100_summary_pairwise_sweep_real_summary_h128_do0p1_lr0p001_wd0p0001_bs8_hd0p5\run_report.html`
+- `outputs\runs\pilot_top100_summary_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
@@ -508,7 +576,9 @@ Notes:
 Do not trust the summary model as "good" yet. The summary pairwise sweep
 improved the holdout mean MAE to 0.01987 and moved holdout pairwise order to
 51.71%, but validation ranking was much stronger than holdout ranking, so the
-small split is unstable.
+small split is unstable. The 5-seed stability check confirmed this instability:
+mean holdout MAE was 0.02524 +/- 0.00778 and two seeds failed all three
+train-mean baselines.
 The m7000 summary check did not beat the m3000 summary run on MAE, so raising
 `MAX_NOTES` is not automatically helpful for the summary model.
 
@@ -525,7 +595,8 @@ Next training iteration:
 1. Prefer `feature-set=core`, 200 trees, leaf 2, and `sqrt` max features for
    tabular pilot comparisons.
 2. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
-   effective batch size 16 as the current local summary tuning baseline.
+   effective batch size 16 as a local smoke/tuning baseline only; require
+   multi-seed or grouped-CV evidence before trusting summary quality.
 3. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
 4. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`

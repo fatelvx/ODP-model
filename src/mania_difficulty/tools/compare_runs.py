@@ -35,6 +35,13 @@ def metrics_rows(run_dir: Path, metrics_path: Path, evaluation: str) -> list[dic
                 "baseline_mae": values.get("baseline_mae"),
                 "mae_improvement_vs_baseline": values.get("mae_improvement_vs_baseline"),
                 "mae_improvement_pct": values.get("mae_improvement_pct"),
+                "difficulty_rating_baseline_mae": values.get("difficulty_rating_baseline_mae"),
+                "mae_improvement_vs_difficulty_rating_baseline": values.get(
+                    "mae_improvement_vs_difficulty_rating_baseline"
+                ),
+                "mae_improvement_pct_vs_difficulty_rating_baseline": values.get(
+                    "mae_improvement_pct_vs_difficulty_rating_baseline"
+                ),
                 "best_val_loss": run_info.get("best_val_loss"),
                 "test_loss": run_info.get("test_loss"),
                 "cv_folds": run_info.get("cv_folds"),
@@ -72,7 +79,7 @@ def write_comparison_report(rows: list[dict[str, object]], out_html: Path) -> No
 </head>
 <body>
   <h1>Run Comparison</h1>
-  <p>Lower MAE is better. Positive improvement means the model beats a train-mean baseline.</p>
+  <p>Lower MAE is better. Positive improvement means the model beats the named baseline: train-mean for <code>mae_improvement_pct</code>, or difficulty-rating linear fit for difficulty-rating columns.</p>
   {table}
 </body>
 </html>

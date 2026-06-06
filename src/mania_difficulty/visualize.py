@@ -266,11 +266,27 @@ def training_performance_html(history_csv: Path, *, heading_level: int = 2) -> s
 
 
 def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
+    has_difficulty_baseline = any(
+        isinstance(metrics.get(target), dict)
+        and "difficulty_rating_baseline_mae" in metrics.get(target, {})
+        for target in target_columns
+    )
     rows = []
     for target in target_columns:
         target_metrics = metrics.get(target, {})
         baseline_mae = target_metrics.get("baseline_mae", float("nan"))
         improvement_pct = target_metrics.get("mae_improvement_pct", float("nan"))
+        difficulty_cells = ""
+        if has_difficulty_baseline:
+            difficulty_baseline_mae = target_metrics.get("difficulty_rating_baseline_mae", float("nan"))
+            difficulty_improvement_pct = target_metrics.get(
+                "mae_improvement_pct_vs_difficulty_rating_baseline",
+                float("nan"),
+            )
+            difficulty_cells = (
+                f"<td>{difficulty_baseline_mae:.6f}</td>"
+                f"<td>{difficulty_improvement_pct * 100:.2f}%</td>"
+            )
         rows.append(
             "<tr>"
             f"<td>{html.escape(target)}</td>"
@@ -280,12 +296,18 @@ def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
             f"<td>{target_metrics.get('pairwise_order_accuracy', float('nan')):.2%}</td>"
             f"<td>{baseline_mae:.6f}</td>"
             f"<td>{improvement_pct * 100:.2f}%</td>"
+            f"{difficulty_cells}"
             "</tr>"
         )
+    difficulty_header = (
+        "<th>Difficulty Rating Baseline MAE</th><th>Difficulty Rating Improvement</th>"
+        if has_difficulty_baseline
+        else ""
+    )
     return (
         "<table><thead><tr><th>Target</th><th>MAE</th><th>R2</th>"
         "<th>Spearman</th><th>Pairwise Order</th>"
-        "<th>Baseline MAE</th><th>Improvement</th></tr></thead>"
+        f"<th>Baseline MAE</th><th>Improvement</th>{difficulty_header}</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
 

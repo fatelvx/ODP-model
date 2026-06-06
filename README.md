@@ -132,6 +132,12 @@ Metrics include a train-mean baseline when available:
 - `spearman`: rank correlation between predicted and observed proxy values
 - `pairwise_order_accuracy`: percent of map pairs ranked in the same order by model and proxy
 
+When labels include osu!'s `difficulty_rating`, training also fits a simple
+linear `difficulty_rating -> target` baseline on the training split and reports
+`difficulty_rating_baseline_mae` plus improvement vs that baseline. This tells
+us whether the sequence model is beating a basic existing difficulty signal,
+not just the train-mean baseline.
+
 When the label file has `beatmapset_id`, train/validation/test and
 cross-validation splits keep the same beatmapset in only one split. This avoids
 overstating performance by testing on another difficulty from a mapset the

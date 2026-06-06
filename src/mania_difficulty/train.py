@@ -438,6 +438,36 @@ def validation_history_metrics(
     }
 
 
+def metadata_linear_baseline_predictions(
+    labels: pd.DataFrame,
+    train_indices: list[int],
+    eval_indices: list[int],
+    target_columns: list[str],
+    *,
+    metadata_column: str,
+) -> np.ndarray | None:
+    if metadata_column not in labels.columns:
+        return None
+    required_columns = [metadata_column, *target_columns]
+    train_frame = labels.iloc[train_indices][required_columns].apply(pd.to_numeric, errors="coerce")
+    eval_frame = labels.iloc[eval_indices][[metadata_column]].apply(pd.to_numeric, errors="coerce")
+    if train_frame.isna().any().any() or eval_frame.isna().any().any():
+        return None
+    if len(train_frame) < 2 or len(eval_frame) < 1:
+        return None
+
+    train_x = train_frame[metadata_column].to_numpy(dtype="float64")
+    if float(np.std(train_x)) < 1e-12:
+        return None
+    train_design = np.column_stack([np.ones(len(train_x), dtype="float64"), train_x])
+    train_y = train_frame[target_columns].to_numpy(dtype="float64")
+    coefficients, *_ = np.linalg.lstsq(train_design, train_y, rcond=None)
+
+    eval_x = eval_frame[metadata_column].to_numpy(dtype="float64")
+    eval_design = np.column_stack([np.ones(len(eval_x), dtype="float64"), eval_x])
+    return (eval_design @ coefficients).astype("float32")
+
+
 def checkpoint_metric_initial_score(metric: str) -> float:
     direction = CHECKPOINT_METRICS[metric]
     return float("-inf") if direction == "max" else float("inf")
@@ -963,7 +993,25 @@ def train_tabular_forest(
     write_error_slices(run_dir / "error_slices.csv", args.labels, predictions_csv, target_column="mean_acc")
 
     baseline_pred = repeat_baseline(y_test, y_train.mean(axis=0))
-    metrics = regression_report(y_test, test_pred, target_columns, baseline_pred=baseline_pred)
+    difficulty_baseline_pred = metadata_linear_baseline_predictions(
+        dataset.labels,
+        train_indices,
+        test_indices,
+        target_columns,
+        metadata_column="difficulty_rating",
+    )
+    named_baselines = (
+        {"difficulty_rating": difficulty_baseline_pred}
+        if difficulty_baseline_pred is not None
+        else None
+    )
+    metrics = regression_report(
+        y_test,
+        test_pred,
+        target_columns,
+        baseline_pred=baseline_pred,
+        named_baselines=named_baselines,
+    )
     metrics["_run"] = {
         "model_name": args.model,
         "seed": args.seed,
@@ -1299,7 +1347,25 @@ def train(args: argparse.Namespace) -> Path:
     write_error_slices(run_dir / "error_slices.csv", args.labels, predictions_csv, target_column="mean_acc")
 
     baseline_pred = repeat_baseline(actual, target_mean_np)
-    metrics = regression_report(actual, pred, target_columns, baseline_pred=baseline_pred)
+    difficulty_baseline_pred = metadata_linear_baseline_predictions(
+        dataset.labels,
+        train_indices,
+        test_indices,
+        target_columns,
+        metadata_column="difficulty_rating",
+    )
+    named_baselines = (
+        {"difficulty_rating": difficulty_baseline_pred}
+        if difficulty_baseline_pred is not None
+        else None
+    )
+    metrics = regression_report(
+        actual,
+        pred,
+        target_columns,
+        baseline_pred=baseline_pred,
+        named_baselines=named_baselines,
+    )
     metrics["_run"] = {
         "model_name": args.model,
         "seed": args.seed,

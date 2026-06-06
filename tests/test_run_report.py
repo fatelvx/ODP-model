@@ -117,6 +117,9 @@ class RunReportTests(unittest.TestCase):
                             "baseline_mae": 0.2,
                             "mae_improvement_vs_baseline": 0.1,
                             "mae_improvement_pct": 0.5,
+                            "difficulty_rating_baseline_mae": 0.15,
+                            "mae_improvement_vs_difficulty_rating_baseline": 0.05,
+                            "mae_improvement_pct_vs_difficulty_rating_baseline": 1 / 3,
                         },
                         "_run": {
                             "model_name": "summary",
@@ -181,6 +184,9 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Peak CUDA Memory MB", report)
         self.assertIn("Model Verdict", report)
         self.assertIn("Targets Beating Baseline", report)
+        self.assertIn("Difficulty Rating Baseline MAE", report)
+        self.assertIn("Difficulty Rating Improvement", report)
+        self.assertIn("33.33%", report)
         self.assertIn("Mean Pairwise Order", report)
         self.assertIn("Weakest Target", report)
 

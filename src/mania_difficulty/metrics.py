@@ -66,6 +66,7 @@ def regression_report(
     target_columns: list[str],
     *,
     baseline_pred: np.ndarray | None = None,
+    named_baselines: dict[str, np.ndarray] | None = None,
 ) -> dict[str, dict[str, float]]:
     report: dict[str, dict[str, float]] = {}
     for index, column in enumerate(target_columns):
@@ -81,6 +82,13 @@ def regression_report(
             report[column]["baseline_mae"] = baseline_mae
             report[column]["mae_improvement_vs_baseline"] = baseline_mae - mae
             report[column]["mae_improvement_pct"] = (
+                ((baseline_mae - mae) / baseline_mae) if baseline_mae else 0.0
+            )
+        for baseline_name, baseline_values in (named_baselines or {}).items():
+            baseline_mae = mean_absolute_error(y_true[:, index], baseline_values[:, index])
+            report[column][f"{baseline_name}_baseline_mae"] = baseline_mae
+            report[column][f"mae_improvement_vs_{baseline_name}_baseline"] = baseline_mae - mae
+            report[column][f"mae_improvement_pct_vs_{baseline_name}_baseline"] = (
                 ((baseline_mae - mae) / baseline_mae) if baseline_mae else 0.0
             )
     return report

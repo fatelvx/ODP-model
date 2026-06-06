@@ -156,6 +156,8 @@ def metrics_table(run_dirs: list[Path]) -> str:
         "spearman",
         "pairwise_order_accuracy",
         "mae_improvement_pct",
+        "difficulty_rating_baseline_mae",
+        "mae_improvement_pct_vs_difficulty_rating_baseline",
     ]
     keep_columns = [column for column in keep_columns if column in frame.columns]
     return frame[keep_columns].sort_values(["evaluation", "target", "mae", "run"]).to_html(

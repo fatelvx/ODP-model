@@ -39,9 +39,11 @@ def make_map(rng: np.random.Generator, beatmap_id: int) -> tuple[np.ndarray, dic
     mean_acc = float(np.clip(1.01 - 0.105 * strain + noise, 0.65, 0.995))
     acc_std = float(np.clip(0.012 + 0.035 * strain + rng.normal(0, 0.004), 0.003, 0.14))
     skill_gap = float(np.clip(0.02 + 0.065 * strain + rng.normal(0, 0.006), 0.005, 0.22))
+    difficulty_rating = float(np.clip(0.5 + 2.8 * strain + rng.normal(0, 0.08), 0.5, 10.0))
 
     label = {
         "beatmap_id": beatmap_id,
+        "difficulty_rating": difficulty_rating,
         "mean_acc": mean_acc,
         "acc_std": acc_std,
         "skill_gap": skill_gap,

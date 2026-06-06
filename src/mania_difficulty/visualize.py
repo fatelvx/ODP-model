@@ -105,9 +105,13 @@ def write_run_report(
         metrics_html = metrics_table_html(metrics, target_columns)
         run_info = metrics.get("_run", {})
         if run_info:
+            model_config = run_info.get("model_config", "")
+            if isinstance(model_config, dict):
+                model_config = json.dumps(model_config, ensure_ascii=False)
             run_info_html = (
                 "<table><tbody>"
                 f"<tr><th>Model</th><td>{html.escape(str(run_info.get('model_name', '')))}</td></tr>"
+                f"<tr><th>Model Config</th><td><code>{html.escape(str(model_config))}</code></td></tr>"
                 f"<tr><th>Evaluation</th><td>{html.escape(str(run_info.get('evaluation', '')))}</td></tr>"
                 f"<tr><th>Feature Set</th><td>{html.escape(str(run_info.get('feature_set', '')))}</td></tr>"
                 f"<tr><th>Split</th><td>{html.escape(str(run_info.get('split_strategy', '')))}</td></tr>"

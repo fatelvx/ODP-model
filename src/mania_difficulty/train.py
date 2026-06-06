@@ -157,6 +157,23 @@ def parse_max_features(value: str) -> str | float:
     return parsed
 
 
+def model_config_from_args(args: argparse.Namespace) -> dict[str, object]:
+    if args.model == "lstm":
+        return {
+            "embed_dim": args.lstm_embed_dim,
+            "hidden_dim": args.lstm_hidden_dim,
+            "num_layers": args.lstm_layers,
+            "dropout": args.lstm_dropout,
+            "head_dropout": args.lstm_head_dropout,
+        }
+    if args.model == "summary":
+        return {
+            "hidden_dim": args.summary_hidden_dim,
+            "dropout": args.summary_dropout,
+        }
+    return {}
+
+
 def weighted_huber_loss(pred: torch.Tensor, target: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     loss = nn.functional.huber_loss(pred, target, reduction="none", delta=1.0)
     return (loss * weights).mean()
@@ -594,7 +611,7 @@ def train(args: argparse.Namespace) -> Path:
     )
 
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
-    model = create_model(args.model, output_dim=len(target_columns)).to(device)
+    model = create_model(args.model, output_dim=len(target_columns), config=model_config_from_args(args)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, args.epochs))
     target_mean_t = torch.tensor(target_mean_np, dtype=torch.float32, device=device)
@@ -686,6 +703,7 @@ def train(args: argparse.Namespace) -> Path:
         "model_name": args.model,
         "seed": args.seed,
         "evaluation": "holdout",
+        "model_config": model.config,
         **split_metadata,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
@@ -754,6 +772,13 @@ def parse_args() -> argparse.Namespace:
         help="For tabular_forest, also write K-fold out-of-fold metrics when set to 2 or higher.",
     )
     parser.add_argument("--workers", type=int, default=-1)
+    parser.add_argument("--lstm-embed-dim", type=int, default=64)
+    parser.add_argument("--lstm-hidden-dim", type=int, default=128)
+    parser.add_argument("--lstm-layers", type=int, default=2)
+    parser.add_argument("--lstm-dropout", type=float, default=0.2)
+    parser.add_argument("--lstm-head-dropout", type=float, default=0.3)
+    parser.add_argument("--summary-hidden-dim", type=int, default=128)
+    parser.add_argument("--summary-dropout", type=float, default=0.2)
     return parser.parse_args()
 
 

@@ -208,6 +208,21 @@ prove the data/label signal before spending GPU time. Use `--model
 tabular_forest` as the small-data baseline and `--model lstm` in Colab or on a
 GPU machine.
 
+Neural model architecture knobs are CLI-controlled and saved in each run report:
+
+```powershell
+python -m mania_difficulty.train `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --model lstm `
+  --run-name lstm_top100_tuned `
+  --lstm-embed-dim 64 `
+  --lstm-hidden-dim 128 `
+  --lstm-layers 2 `
+  --lstm-dropout 0.2 `
+  --lstm-head-dropout 0.3
+```
+
 Compare runs:
 
 ```powershell

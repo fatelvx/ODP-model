@@ -15,6 +15,7 @@ class LSTMDifficultyModel(nn.Module):
         num_layers: int = 2,
         output_dim: int = 3,
         dropout: float = 0.2,
+        head_dropout: float = 0.3,
     ) -> None:
         super().__init__()
         self.config = {
@@ -24,6 +25,7 @@ class LSTMDifficultyModel(nn.Module):
             "num_layers": num_layers,
             "output_dim": output_dim,
             "dropout": dropout,
+            "head_dropout": head_dropout,
         }
         self.note_embedding = nn.Linear(input_dim, embed_dim)
         self.lstm = nn.LSTM(
@@ -37,7 +39,7 @@ class LSTMDifficultyModel(nn.Module):
         self.head = nn.Sequential(
             nn.Linear(hidden_dim * 2, 128),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(head_dropout),
             nn.Linear(128, output_dim),
         )
 

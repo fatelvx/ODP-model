@@ -17,9 +17,12 @@ from mania_difficulty.train import (
     create_tabular_forest_model,
     cross_validation_splits,
     dataset_groups,
+    fit_tabular_model,
     parse_max_features,
     repeat_baseline,
+    sample_weight_min_float,
     tabular_arrays,
+    tabular_sample_weights,
 )
 from mania_difficulty.tools.sweep_selection import (
     parse_summary_selection_metric,
@@ -117,6 +120,8 @@ def evaluate_candidate(
     target_columns: list[str],
     splits: list[tuple[list[int], list[int]]],
     feature_cache: dict[str, np.ndarray],
+    *,
+    sample_weights: np.ndarray | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     x_all = feature_cache[candidate.get("feature_set", "core")]
     oof_pred = np.zeros_like(y_all, dtype="float32")
@@ -128,7 +133,12 @@ def evaluate_candidate(
         train_idx_array = np.asarray(train_idx, dtype=int)
         val_idx_array = np.asarray(val_idx, dtype=int)
         model = create_tabular_forest_model(model_args, seed=base_args.seed + fold_index)
-        model.fit(x_all[train_idx_array], y_all[train_idx_array])
+        fit_tabular_model(
+            model,
+            x_all[train_idx_array],
+            y_all[train_idx_array],
+            sample_weights=None if sample_weights is None else sample_weights[train_idx_array],
+        )
         fold_pred = model.predict(x_all[val_idx_array]).astype("float32")
         fold_baseline = repeat_baseline(y_all[val_idx_array], y_all[train_idx_array].mean(axis=0))
         oof_pred[val_idx_array] = fold_pred
@@ -225,11 +235,21 @@ def main() -> None:
     parser.add_argument("--max-features", type=parse_max_features_list, default=["sqrt", 0.75])
     parser.add_argument("--feature-sets", type=parse_feature_sets, default=["core", "burst"])
     parser.add_argument("--selection-metric", type=parse_summary_selection_metric, default="mean_mae")
+    parser.add_argument("--sample-weight-column", default="")
+    parser.add_argument("--sample-weight-min", type=sample_weight_min_float, default=0.25)
+    parser.add_argument("--sample-weight-max-value", type=float, default=100.0)
     parser.add_argument("--workers", type=int, default=-1)
     args = parser.parse_args()
 
     target_columns = [column.strip() for column in args.targets.split(",") if column.strip()]
-    dataset = ManiaDifficultyDataset(args.labels, args.sequences, target_columns=target_columns)
+    dataset = ManiaDifficultyDataset(
+        args.labels,
+        args.sequences,
+        target_columns=target_columns,
+        sample_weight_column=args.sample_weight_column,
+        sample_weight_min=args.sample_weight_min,
+        sample_weight_max_value=args.sample_weight_max_value,
+    )
     groups = dataset_groups(dataset, args.group_column)
     splits = cross_validation_splits(len(dataset), groups=groups, folds=args.cv_folds, seed=args.seed)
     if not splits:
@@ -250,6 +270,7 @@ def main() -> None:
         )[0]
         for feature_set in args.feature_sets
     }
+    sample_weights = tabular_sample_weights(dataset, list(range(len(dataset))))
     candidates = forest_grid(
         trees=args.trees,
         min_samples_leaf=args.min_samples_leaf,
@@ -268,6 +289,7 @@ def main() -> None:
             target_columns,
             splits,
             feature_cache,
+            sample_weights=sample_weights,
         )
         summary_rows.append(summary)
         detail_rows.extend(details)
@@ -281,6 +303,9 @@ def main() -> None:
         "group_column": args.group_column if groups else "",
         "group_count": len(set(groups)) if groups else 0,
         "sample_size": len(dataset),
+        "sample_weight_column": args.sample_weight_column,
+        "sample_weight_min": args.sample_weight_min,
+        "sample_weight_max_value": args.sample_weight_max_value,
     }
 
     args.out_dir.mkdir(parents=True, exist_ok=True)

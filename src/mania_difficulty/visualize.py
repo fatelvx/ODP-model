@@ -67,6 +67,28 @@ def plot_feature_importance(importances_csv: Path, out_path: Path, *, top_n: int
     plt.close(fig)
 
 
+def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
+    rows = []
+    for target in target_columns:
+        target_metrics = metrics.get(target, {})
+        baseline_mae = target_metrics.get("baseline_mae", float("nan"))
+        improvement_pct = target_metrics.get("mae_improvement_pct", float("nan"))
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(target)}</td>"
+            f"<td>{target_metrics.get('mae', float('nan')):.6f}</td>"
+            f"<td>{target_metrics.get('r2', float('nan')):.4f}</td>"
+            f"<td>{baseline_mae:.6f}</td>"
+            f"<td>{improvement_pct * 100:.2f}%</td>"
+            "</tr>"
+        )
+    return (
+        "<table><thead><tr><th>Target</th><th>MAE</th><th>R2</th>"
+        "<th>Baseline MAE</th><th>Improvement</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def write_run_report(
     run_dir: Path,
     *,
@@ -79,20 +101,20 @@ def write_run_report(
     metrics_html = "<p>No metrics yet.</p>"
     if metrics_path and metrics_path.exists():
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-        rows = []
-        for target in target_columns:
-            target_metrics = metrics.get(target, {})
-            rows.append(
-                "<tr>"
-                f"<td>{html.escape(target)}</td>"
-                f"<td>{target_metrics.get('mae', float('nan')):.6f}</td>"
-                f"<td>{target_metrics.get('r2', float('nan')):.4f}</td>"
-                "</tr>"
-            )
-        metrics_html = (
-            "<table><thead><tr><th>Target</th><th>MAE</th><th>R2</th></tr></thead>"
-            f"<tbody>{''.join(rows)}</tbody></table>"
+        metrics_html = metrics_table_html(metrics, target_columns)
+
+    cv_html = ""
+    cv_metrics_path = run_dir / "cv_metrics.json"
+    if cv_metrics_path.exists():
+        cv_metrics = json.loads(cv_metrics_path.read_text(encoding="utf-8"))
+        cv_html = (
+            "<h2>Cross-Validation Metrics</h2>"
+            "<p>Out-of-fold metrics use every map as validation once, which is steadier for small datasets.</p>"
+            f"{metrics_table_html(cv_metrics, target_columns)}"
         )
+        cv_scatter = run_dir / "cv_prediction_scatter.png"
+        if cv_scatter.exists():
+            cv_html += '<p><img src="cv_prediction_scatter.png" alt="Cross-validation prediction scatter"></p>'
 
     learning_curve_html = (
         f'<p><img src="{html.escape(learning_curve_name)}" alt="Learning curve"></p>'
@@ -130,6 +152,7 @@ def write_run_report(
   <p>Run directory: <code>{html.escape(str(run_dir))}</code></p>
   <h2>Metrics</h2>
   {metrics_html}
+  {cv_html}
   <h2>Learning Curve</h2>
   {learning_curve_html}
   <h2>Predicted vs Observed Proxy</h2>

@@ -15,6 +15,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 
 from mania_difficulty.data.dataset import (
@@ -159,6 +160,10 @@ def write_predictions(
         writer.writerows(rows)
 
 
+def repeat_baseline(targets: np.ndarray, baseline_values: np.ndarray) -> np.ndarray:
+    return np.repeat(baseline_values.reshape(1, -1), len(targets), axis=0).astype("float32")
+
+
 def write_human_review(
     path: Path,
     labels_csv: Path,
@@ -245,6 +250,99 @@ def write_feature_importance(path: Path, importances: np.ndarray) -> None:
             writer.writerow({"feature": feature, "importance": float(importance)})
 
 
+def create_tabular_forest_model(args: argparse.Namespace, *, seed: int) -> TransformedTargetRegressor:
+    regressor = ExtraTreesRegressor(
+        n_estimators=args.forest_trees,
+        min_samples_leaf=args.forest_min_samples_leaf,
+        max_features=args.forest_max_features,
+        random_state=seed,
+        n_jobs=args.workers,
+    )
+    return TransformedTargetRegressor(regressor=regressor, transformer=StandardScaler())
+
+
+def write_cv_fold_metrics(path: Path, rows: list[dict[str, object]]) -> None:
+    fieldnames = [
+        "fold",
+        "target",
+        "mae",
+        "r2",
+        "baseline_mae",
+        "mae_improvement_vs_baseline",
+        "mae_improvement_pct",
+        "val_size",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_tabular_cross_validation(
+    args: argparse.Namespace,
+    dataset: ManiaDifficultyDataset,
+    target_columns: list[str],
+    run_dir: Path,
+) -> None:
+    if args.cv_folds < 2:
+        return
+    if len(dataset) < args.cv_folds:
+        raise RuntimeError(f"Need at least {args.cv_folds} maps for cross-validation.")
+
+    all_indices = list(range(len(dataset)))
+    x_all, y_all, beatmap_ids = tabular_arrays(dataset, all_indices, max_notes=args.max_notes)
+    oof_pred = np.zeros_like(y_all, dtype="float32")
+    oof_baseline = np.zeros_like(y_all, dtype="float32")
+    fold_rows: list[dict[str, object]] = []
+
+    splitter = KFold(n_splits=args.cv_folds, shuffle=True, random_state=args.seed)
+    for fold_index, (train_idx, val_idx) in enumerate(splitter.split(x_all), start=1):
+        model = create_tabular_forest_model(args, seed=args.seed + fold_index)
+        model.fit(x_all[train_idx], y_all[train_idx])
+        fold_pred = model.predict(x_all[val_idx]).astype("float32")
+        fold_baseline = repeat_baseline(y_all[val_idx], y_all[train_idx].mean(axis=0))
+        oof_pred[val_idx] = fold_pred
+        oof_baseline[val_idx] = fold_baseline
+
+        fold_report = regression_report(
+            y_all[val_idx],
+            fold_pred,
+            target_columns,
+            baseline_pred=fold_baseline,
+        )
+        for target in target_columns:
+            fold_rows.append(
+                {
+                    "fold": fold_index,
+                    "target": target,
+                    "val_size": len(val_idx),
+                    **fold_report[target],
+                }
+            )
+
+    cv_predictions_csv = run_dir / "cv_predictions.csv"
+    write_predictions(cv_predictions_csv, beatmap_ids, y_all, oof_pred, target_columns)
+    write_human_review(
+        run_dir / "cv_human_review.csv",
+        args.labels,
+        cv_predictions_csv,
+        target_columns,
+        top_n=20,
+    )
+
+    cv_metrics = regression_report(y_all, oof_pred, target_columns, baseline_pred=oof_baseline)
+    cv_metrics["_run"] = {
+        "model_name": args.model,
+        "seed": args.seed,
+        "evaluation": "cv_oof",
+        "cv_folds": args.cv_folds,
+        "sample_size": len(dataset),
+    }
+    (run_dir / "cv_metrics.json").write_text(json.dumps(cv_metrics, indent=2), encoding="utf-8")
+    write_cv_fold_metrics(run_dir / "cv_fold_metrics.csv", fold_rows)
+    plot_prediction_scatter(cv_predictions_csv, target_columns, run_dir / "cv_prediction_scatter.png")
+
+
 def train_tabular_forest(
     args: argparse.Namespace,
     dataset: ManiaDifficultyDataset,
@@ -258,14 +356,7 @@ def train_tabular_forest(
     x_val, y_val, _ = tabular_arrays(dataset, val_indices, max_notes=args.max_notes)
     x_test, y_test, beatmap_ids = tabular_arrays(dataset, test_indices, max_notes=args.max_notes)
 
-    regressor = ExtraTreesRegressor(
-        n_estimators=args.forest_trees,
-        min_samples_leaf=args.forest_min_samples_leaf,
-        max_features=args.forest_max_features,
-        random_state=args.seed,
-        n_jobs=args.workers,
-    )
-    model = TransformedTargetRegressor(regressor=regressor, transformer=StandardScaler())
+    model = create_tabular_forest_model(args, seed=args.seed)
     model.fit(x_train, y_train)
 
     train_pred = model.predict(x_train)
@@ -295,10 +386,12 @@ def train_tabular_forest(
     write_predictions(predictions_csv, beatmap_ids, y_test, test_pred, target_columns)
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
 
-    metrics = regression_report(y_test, test_pred, target_columns)
+    baseline_pred = repeat_baseline(y_test, y_train.mean(axis=0))
+    metrics = regression_report(y_test, test_pred, target_columns, baseline_pred=baseline_pred)
     metrics["_run"] = {
         "model_name": args.model,
         "seed": args.seed,
+        "evaluation": "holdout",
         "best_epoch": 1,
         "best_val_loss": val_loss,
         "test_loss": test_loss,
@@ -315,6 +408,7 @@ def train_tabular_forest(
     plot_feature_importance(feature_importance_csv, run_dir / "feature_importance.png")
     plot_learning_curve(history_csv, run_dir / "learning_curve.png")
     plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
+    write_tabular_cross_validation(args, dataset, target_columns, run_dir)
     write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
 
     (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2, default=str), encoding="utf-8")
@@ -453,10 +547,12 @@ def train(args: argparse.Namespace) -> Path:
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
     write_human_review(run_dir / "human_review.csv", args.labels, predictions_csv, target_columns)
 
-    metrics = regression_report(actual, pred, target_columns)
+    baseline_pred = repeat_baseline(actual, target_mean_np)
+    metrics = regression_report(actual, pred, target_columns, baseline_pred=baseline_pred)
     metrics["_run"] = {
         "model_name": args.model,
         "seed": args.seed,
+        "evaluation": "holdout",
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "test_loss": test_loss,
@@ -506,6 +602,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--forest-trees", type=int, default=400)
     parser.add_argument("--forest-min-samples-leaf", type=int, default=2)
     parser.add_argument("--forest-max-features", type=parse_max_features, default="sqrt")
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=0,
+        help="For tabular_forest, also write K-fold out-of-fold metrics when set to 2 or higher.",
+    )
     parser.add_argument("--workers", type=int, default=-1)
     return parser.parse_args()
 

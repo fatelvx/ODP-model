@@ -7,10 +7,9 @@ from pathlib import Path
 import pandas as pd
 
 
-def run_metrics_rows(run_dir: Path) -> list[dict[str, object]]:
-    metrics_path = run_dir / "metrics.json"
+def metrics_rows(run_dir: Path, metrics_path: Path, evaluation: str) -> list[dict[str, object]]:
     if not metrics_path.exists():
-        raise FileNotFoundError(f"No metrics.json found in {run_dir}")
+        raise FileNotFoundError(f"No {metrics_path.name} found in {run_dir}")
 
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     run_info = metrics.get("_run", {})
@@ -23,21 +22,35 @@ def run_metrics_rows(run_dir: Path) -> list[dict[str, object]]:
                 "run": run_dir.name,
                 "model_name": run_info.get("model_name"),
                 "seed": run_info.get("seed"),
+                "evaluation": run_info.get("evaluation", evaluation),
                 "target": target,
                 "mae": values.get("mae"),
                 "r2": values.get("r2"),
+                "baseline_mae": values.get("baseline_mae"),
+                "mae_improvement_vs_baseline": values.get("mae_improvement_vs_baseline"),
+                "mae_improvement_pct": values.get("mae_improvement_pct"),
                 "best_val_loss": run_info.get("best_val_loss"),
                 "test_loss": run_info.get("test_loss"),
+                "cv_folds": run_info.get("cv_folds"),
                 "train_size": run_info.get("train_size"),
                 "val_size": run_info.get("val_size"),
                 "test_size": run_info.get("test_size"),
+                "sample_size": run_info.get("sample_size"),
             }
         )
     return rows
 
 
+def run_metrics_rows(run_dir: Path) -> list[dict[str, object]]:
+    rows = metrics_rows(run_dir, run_dir / "metrics.json", "holdout")
+    cv_metrics_path = run_dir / "cv_metrics.json"
+    if cv_metrics_path.exists():
+        rows.extend(metrics_rows(run_dir, cv_metrics_path, "cv_oof"))
+    return rows
+
+
 def write_comparison_report(rows: list[dict[str, object]], out_html: Path) -> None:
-    frame = pd.DataFrame(rows).sort_values(["target", "mae", "run"])
+    frame = pd.DataFrame(rows).sort_values(["evaluation", "target", "mae", "run"])
     table = frame.to_html(index=False, float_format=lambda value: f"{value:.6f}")
     report = f"""<!doctype html>
 <html lang="en">
@@ -53,7 +66,7 @@ def write_comparison_report(rows: list[dict[str, object]], out_html: Path) -> No
 </head>
 <body>
   <h1>Run Comparison</h1>
-  <p>Lower MAE is better. R2 below 0 means the model is worse than predicting the target mean on this split.</p>
+  <p>Lower MAE is better. Positive improvement means the model beats a train-mean baseline.</p>
   {table}
 </body>
 </html>
@@ -74,7 +87,7 @@ def main() -> None:
 
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
     args.out_html.parent.mkdir(parents=True, exist_ok=True)
-    frame = pd.DataFrame(rows).sort_values(["target", "mae", "run"])
+    frame = pd.DataFrame(rows).sort_values(["evaluation", "target", "mae", "run"])
     frame.to_csv(args.out_csv, index=False, encoding="utf-8")
     write_comparison_report(rows, args.out_html)
     print(frame.to_string(index=False))

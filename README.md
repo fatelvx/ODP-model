@@ -65,6 +65,7 @@ python -m mania_difficulty.train `
   --labels data/processed/synthetic/labels.csv `
   --sequences data/processed/synthetic/sequences `
   --model tabular_forest `
+  --cv-folds 5 `
   --run-name synthetic_forest_smoke
 ```
 
@@ -81,8 +82,16 @@ Each run saves:
 - `predictions.csv`: actual model outputs on the test split
 - `human_review.csv`: maps worth checking by hand
 - `prediction_scatter.png`: predicted vs actual plots
+- `cv_metrics.json`: K-fold out-of-fold metrics when `--cv-folds` is enabled
+- `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
 - `metrics.json`: MAE and R2 per target
 - `best_model.pt`: checkpoint for prediction
+
+Metrics include a train-mean baseline when available:
+
+- `baseline_mae`: MAE from predicting the training mean for that target
+- `mae_improvement_vs_baseline`: positive means the model beat that baseline
+- `mae_improvement_pct`: the same improvement as a percent
 
 ## Real Data Pipeline
 
@@ -132,6 +141,7 @@ python -m mania_difficulty.train `
   --labels data/processed/labels.csv `
   --sequences data/processed/sequences `
   --model tabular_forest `
+  --cv-folds 5 `
   --run-name forest_top100_baseline
 ```
 

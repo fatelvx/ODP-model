@@ -16,12 +16,14 @@ from mania_difficulty.models.tabular import summarize_sequence
 def predict_tabular(checkpoint_path: Path, features: np.ndarray, osu_path: Path) -> dict[str, object]:
     checkpoint = joblib.load(checkpoint_path)
     max_notes = int(checkpoint.get("max_notes", 3000))
+    feature_set = checkpoint.get("feature_set", "core")
     clipped = features[:max_notes]
-    summary = summarize_sequence(clipped)
+    summary = summarize_sequence(clipped, feature_set=feature_set)
     pred = checkpoint["model"].predict(summary[None, :])[0]
     return {
         "osu_file": str(osu_path),
         "model_name": checkpoint.get("model_name", "tabular_forest"),
+        "feature_set": feature_set,
         "num_notes_used": int(len(clipped)),
         "predictions": {
             column: float(pred[index])

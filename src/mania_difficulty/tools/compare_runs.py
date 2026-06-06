@@ -23,6 +23,7 @@ def metrics_rows(run_dir: Path, metrics_path: Path, evaluation: str) -> list[dic
                 "model_name": run_info.get("model_name"),
                 "seed": run_info.get("seed"),
                 "evaluation": run_info.get("evaluation", evaluation),
+                "feature_set": run_info.get("feature_set"),
                 "split_strategy": run_info.get("split_strategy"),
                 "group_column": run_info.get("group_column"),
                 "group_count": run_info.get("group_count"),

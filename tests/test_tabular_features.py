@@ -2,7 +2,11 @@ import unittest
 
 import numpy as np
 
-from mania_difficulty.models.tabular import SUMMARY_FEATURE_NAMES, summarize_sequence
+from mania_difficulty.models.tabular import (
+    SUMMARY_FEATURE_NAMES,
+    feature_names_for_set,
+    summarize_sequence,
+)
 
 
 class TabularFeatureTests(unittest.TestCase):
@@ -30,6 +34,39 @@ class TabularFeatureTests(unittest.TestCase):
 
         self.assertEqual(summary.shape, (len(SUMMARY_FEATURE_NAMES),))
         self.assertTrue(np.all(summary == 0))
+
+    def test_summarize_sequence_detects_density_and_jack_patterns(self):
+        rows = []
+        time_sec = 0.0
+        previous_time = 0.0
+        for index in range(20):
+            if index < 10:
+                time_sec += 0.5
+                column = index % 4
+                chord = 1
+            else:
+                time_sec += 0.05
+                column = 0
+                chord = 2
+            rows.append(
+                [
+                    time_sec / 6.0,
+                    time_sec - previous_time,
+                    column / 3.0,
+                    0.0,
+                    0.0,
+                    chord / 4.0,
+                ]
+            )
+            previous_time = time_sec
+        features = np.asarray(rows, dtype=np.float32)
+
+        names = feature_names_for_set("burst")
+        summary = summarize_sequence(features, feature_set="burst")
+
+        self.assertGreater(summary[names.index("peak_notes_per_sec_1s")], 10)
+        self.assertGreater(summary[names.index("jack_ratio_100ms")], 0.4)
+        self.assertGreater(summary[names.index("burst_chord_2_ratio")], 0.3)
 
 
 if __name__ == "__main__":

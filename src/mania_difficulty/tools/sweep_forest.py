@@ -38,24 +38,41 @@ def parse_max_features_list(value: str) -> list[str | float]:
     return [parse_max_features(item) for item in items]
 
 
+def parse_feature_sets(value: str) -> list[str]:
+    items = [item.strip() for item in value.split(",") if item.strip()]
+    allowed = {"core", "burst"}
+    invalid = [item for item in items if item not in allowed]
+    if invalid:
+        raise argparse.ArgumentTypeError(f"Unknown feature sets: {invalid}")
+    if not items:
+        raise argparse.ArgumentTypeError("Expected at least one feature set.")
+    return items
+
+
 def forest_grid(
     *,
     trees: list[int],
     min_samples_leaf: list[int],
     max_features: list[str | float],
+    feature_sets: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    feature_sets = feature_sets or ["core"]
     candidates = []
-    for tree_count in trees:
-        for leaf_count in min_samples_leaf:
-            for feature_count in max_features:
-                candidates.append(
-                    {
-                        "candidate_id": f"trees{tree_count}_leaf{leaf_count}_feat{feature_count}",
-                        "forest_trees": tree_count,
-                        "forest_min_samples_leaf": leaf_count,
-                        "forest_max_features": feature_count,
-                    }
-                )
+    for feature_set in feature_sets:
+        for tree_count in trees:
+            for leaf_count in min_samples_leaf:
+                for feature_count in max_features:
+                    candidates.append(
+                        {
+                            "candidate_id": (
+                                f"{feature_set}_trees{tree_count}_leaf{leaf_count}_feat{feature_count}"
+                            ),
+                            "feature_set": feature_set,
+                            "forest_trees": tree_count,
+                            "forest_min_samples_leaf": leaf_count,
+                            "forest_max_features": feature_count,
+                        }
+                    )
     return candidates
 
 
@@ -68,6 +85,7 @@ def choose_best_candidate(summary_rows: list[dict[str, Any]]) -> dict[str, Any]:
             float(row["mean_mae"]),
             int(row["forest_trees"]),
             -int(row["forest_min_samples_leaf"]),
+            str(row.get("feature_set", "")),
             str(row.get("forest_max_features", "")),
         ),
     )[0]
@@ -78,6 +96,7 @@ def candidate_args(base_args: argparse.Namespace, candidate: dict[str, Any]) -> 
         forest_trees=int(candidate["forest_trees"]),
         forest_min_samples_leaf=int(candidate["forest_min_samples_leaf"]),
         forest_max_features=candidate["forest_max_features"],
+        feature_set=candidate.get("feature_set", "core"),
         workers=base_args.workers,
     )
 
@@ -85,11 +104,12 @@ def candidate_args(base_args: argparse.Namespace, candidate: dict[str, Any]) -> 
 def evaluate_candidate(
     base_args: argparse.Namespace,
     candidate: dict[str, Any],
-    x_all: np.ndarray,
     y_all: np.ndarray,
     target_columns: list[str],
     splits: list[tuple[list[int], list[int]]],
+    feature_cache: dict[str, np.ndarray],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    x_all = feature_cache[candidate.get("feature_set", "core")]
     oof_pred = np.zeros_like(y_all, dtype="float32")
     oof_baseline = np.zeros_like(y_all, dtype="float32")
     fold_rows = []
@@ -181,6 +201,7 @@ def main() -> None:
     parser.add_argument("--trees", type=parse_int_list, default=[200, 400])
     parser.add_argument("--min-samples-leaf", type=parse_int_list, default=[1, 2, 4])
     parser.add_argument("--max-features", type=parse_max_features_list, default=["sqrt", 0.75])
+    parser.add_argument("--feature-sets", type=parse_feature_sets, default=["core", "burst"])
     parser.add_argument("--workers", type=int, default=-1)
     args = parser.parse_args()
 
@@ -191,18 +212,40 @@ def main() -> None:
     if not splits:
         raise RuntimeError("Need at least 2 CV folds for sweep.")
 
-    x_all, y_all, _ = tabular_arrays(dataset, list(range(len(dataset))), max_notes=args.max_notes)
+    _, y_all, _ = tabular_arrays(
+        dataset,
+        list(range(len(dataset))),
+        max_notes=args.max_notes,
+        feature_set="core",
+    )
+    feature_cache = {
+        feature_set: tabular_arrays(
+            dataset,
+            list(range(len(dataset))),
+            max_notes=args.max_notes,
+            feature_set=feature_set,
+        )[0]
+        for feature_set in args.feature_sets
+    }
     candidates = forest_grid(
         trees=args.trees,
         min_samples_leaf=args.min_samples_leaf,
         max_features=args.max_features,
+        feature_sets=args.feature_sets,
     )
 
     summary_rows = []
     detail_rows = []
     for candidate in candidates:
         print(f"Evaluating {candidate['candidate_id']}")
-        summary, details = evaluate_candidate(args, candidate, x_all, y_all, target_columns, splits)
+        summary, details = evaluate_candidate(
+            args,
+            candidate,
+            y_all,
+            target_columns,
+            splits,
+            feature_cache,
+        )
         summary_rows.append(summary)
         detail_rows.extend(details)
 

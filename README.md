@@ -81,11 +81,17 @@ python -m mania_difficulty.tools.sweep_forest `
   --group-column beatmapset_id `
   --trees 200,500 `
   --min-samples-leaf 1,2,4 `
-  --max-features sqrt,0.75
+  --max-features sqrt,0.75 `
+  --feature-sets core,burst
 ```
 
 The sweep writes `sweep_summary.csv`, `sweep_details.csv`,
 `best_params.json`, and `sweep_report.html`.
+
+Feature sets:
+
+- `core`: stable summary baseline features
+- `burst`: adds peak density, burst ratio, jack, trill-like, and chord-burst features
 
 Open the generated report:
 
@@ -181,7 +187,8 @@ python -m mania_difficulty.tools.sweep_forest `
   --group-column beatmapset_id `
   --trees 200,500 `
   --min-samples-leaf 1,2,4 `
-  --max-features sqrt,0.75
+  --max-features sqrt,0.75 `
+  --feature-sets core,burst
 ```
 
 Train the sequence model:

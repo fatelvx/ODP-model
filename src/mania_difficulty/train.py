@@ -24,7 +24,7 @@ from mania_difficulty.data.dataset import (
 )
 from mania_difficulty.metrics import regression_report
 from mania_difficulty.models.factory import create_model
-from mania_difficulty.models.tabular import SUMMARY_FEATURE_NAMES, summarize_sequence
+from mania_difficulty.models.tabular import feature_names_for_set, summarize_sequence
 from mania_difficulty.visualize import (
     plot_feature_importance,
     plot_learning_curve,
@@ -296,6 +296,7 @@ def tabular_arrays(
     indices: list[int],
     *,
     max_notes: int,
+    feature_set: str,
 ) -> tuple[np.ndarray, np.ndarray, list[int]]:
     features = []
     targets = []
@@ -303,7 +304,7 @@ def tabular_arrays(
     for index in indices:
         sample = dataset[index]
         sequence = np.asarray(sample["features"], dtype="float32")[:max_notes]
-        features.append(summarize_sequence(sequence))
+        features.append(summarize_sequence(sequence, feature_set=feature_set))
         targets.append(np.asarray(sample["targets"], dtype="float32"))
         beatmap_ids.append(int(sample["beatmap_id"]))
     return (
@@ -313,9 +314,9 @@ def tabular_arrays(
     )
 
 
-def write_feature_importance(path: Path, importances: np.ndarray) -> None:
+def write_feature_importance(path: Path, importances: np.ndarray, feature_names: list[str]) -> None:
     rows = sorted(
-        zip(SUMMARY_FEATURE_NAMES, importances, strict=True),
+        zip(feature_names, importances, strict=True),
         key=lambda item: float(item[1]),
         reverse=True,
     )
@@ -367,7 +368,12 @@ def write_tabular_cross_validation(
         raise RuntimeError(f"Need at least {args.cv_folds} maps for cross-validation.")
 
     all_indices = list(range(len(dataset)))
-    x_all, y_all, beatmap_ids = tabular_arrays(dataset, all_indices, max_notes=args.max_notes)
+    x_all, y_all, beatmap_ids = tabular_arrays(
+        dataset,
+        all_indices,
+        max_notes=args.max_notes,
+        feature_set=args.feature_set,
+    )
     oof_pred = np.zeros_like(y_all, dtype="float32")
     oof_baseline = np.zeros_like(y_all, dtype="float32")
     fold_rows: list[dict[str, object]] = []
@@ -421,6 +427,7 @@ def write_tabular_cross_validation(
         "model_name": args.model,
         "seed": args.seed,
         "evaluation": "cv_oof",
+        "feature_set": args.feature_set,
         "cv_folds": args.cv_folds,
         "split_strategy": split_strategy,
         "group_column": args.group_column if split_strategy.startswith("group:") else "",
@@ -443,9 +450,25 @@ def train_tabular_forest(
     split_metadata: dict[str, object],
     groups: list[str] | None,
 ) -> Path:
-    x_train, y_train, _ = tabular_arrays(dataset, train_indices, max_notes=args.max_notes)
-    x_val, y_val, _ = tabular_arrays(dataset, val_indices, max_notes=args.max_notes)
-    x_test, y_test, beatmap_ids = tabular_arrays(dataset, test_indices, max_notes=args.max_notes)
+    feature_names = feature_names_for_set(args.feature_set)
+    x_train, y_train, _ = tabular_arrays(
+        dataset,
+        train_indices,
+        max_notes=args.max_notes,
+        feature_set=args.feature_set,
+    )
+    x_val, y_val, _ = tabular_arrays(
+        dataset,
+        val_indices,
+        max_notes=args.max_notes,
+        feature_set=args.feature_set,
+    )
+    x_test, y_test, beatmap_ids = tabular_arrays(
+        dataset,
+        test_indices,
+        max_notes=args.max_notes,
+        feature_set=args.feature_set,
+    )
 
     model = create_tabular_forest_model(args, seed=args.seed)
     model.fit(x_train, y_train)
@@ -467,7 +490,8 @@ def train_tabular_forest(
             "model": model,
             "model_name": args.model,
             "target_columns": target_columns,
-            "feature_names": SUMMARY_FEATURE_NAMES,
+            "feature_names": feature_names,
+            "feature_set": args.feature_set,
             "max_notes": args.max_notes,
         },
         checkpoint_path,
@@ -483,6 +507,7 @@ def train_tabular_forest(
         "model_name": args.model,
         "seed": args.seed,
         "evaluation": "holdout",
+        "feature_set": args.feature_set,
         **split_metadata,
         "best_epoch": 1,
         "best_val_loss": val_loss,
@@ -496,7 +521,7 @@ def train_tabular_forest(
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
     feature_importance_csv = run_dir / "feature_importance.csv"
-    write_feature_importance(feature_importance_csv, model.regressor_.feature_importances_)
+    write_feature_importance(feature_importance_csv, model.regressor_.feature_importances_, feature_names)
     plot_feature_importance(feature_importance_csv, run_dir / "feature_importance.png")
     plot_learning_curve(history_csv, run_dir / "learning_curve.png")
     plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
@@ -716,6 +741,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--forest-trees", type=int, default=400)
     parser.add_argument("--forest-min-samples-leaf", type=int, default=2)
     parser.add_argument("--forest-max-features", type=parse_max_features, default="sqrt")
+    parser.add_argument(
+        "--feature-set",
+        choices=["core", "burst"],
+        default="core",
+        help="Tabular feature set. core preserves the stable baseline; burst adds density/jack/chord-burst features.",
+    )
     parser.add_argument(
         "--cv-folds",
         type=int,

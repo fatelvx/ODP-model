@@ -109,6 +109,7 @@ def write_run_report(
                 "<table><tbody>"
                 f"<tr><th>Model</th><td>{html.escape(str(run_info.get('model_name', '')))}</td></tr>"
                 f"<tr><th>Evaluation</th><td>{html.escape(str(run_info.get('evaluation', '')))}</td></tr>"
+                f"<tr><th>Feature Set</th><td>{html.escape(str(run_info.get('feature_set', '')))}</td></tr>"
                 f"<tr><th>Split</th><td>{html.escape(str(run_info.get('split_strategy', '')))}</td></tr>"
                 f"<tr><th>Group Column</th><td>{html.escape(str(run_info.get('group_column', '')))}</td></tr>"
                 f"<tr><th>Group Count</th><td>{html.escape(str(run_info.get('group_count', '')))}</td></tr>"

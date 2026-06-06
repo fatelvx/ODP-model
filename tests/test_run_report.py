@@ -40,6 +40,21 @@ class RunReportTests(unittest.TestCase):
             pd.DataFrame(
                 [
                     {
+                        "target": "mean_acc",
+                        "count": 4,
+                        "actual_mean": 0.8,
+                        "pred_mean": 0.78,
+                        "bias": -0.02,
+                        "mae": 0.1,
+                        "max_abs_error": 0.2,
+                        "actual_std": 0.05,
+                        "pred_std": 0.04,
+                    }
+                ]
+            ).to_csv(run_dir / "prediction_summary.csv", index=False)
+            pd.DataFrame(
+                [
+                    {
                         "slice_column": "overall",
                         "slice_value": "all",
                         "count": 4,
@@ -172,6 +187,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("attention_report.html", report)
         self.assertIn("Prediction Rankings", report)
         self.assertIn("predicted_hardest", report)
+        self.assertIn("Prediction Summary", report)
+        self.assertIn("bias", report)
         self.assertIn("Worst Error Slices", report)
         self.assertIn("score_count: high", report)
         self.assertIn("0.250000", report)

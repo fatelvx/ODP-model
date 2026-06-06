@@ -106,6 +106,7 @@ Each run saves:
 - `learning_curve.png`: loss curve plus validation MAE / pairwise-order curve when available
 - `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, runtime device, baseline wins, and fragile metadata-bin checks
 - `predictions.csv`: actual model outputs on the test split
+- `prediction_summary.csv`: per-target actual mean, predicted mean, bias, MAE, max error, and spread
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently
@@ -119,6 +120,7 @@ Each run saves:
 - `cv_human_pair_judgment_template.csv`: fillable out-of-fold human judgment CSV
 - `cv_error_slices.csv`: cross-validation error slices when `--cv-folds` is enabled
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
+- `cv_prediction_summary.csv`: out-of-fold per-target bias and error scale
 - `cv_prediction_rankings.csv`: cross-validation predicted hardest, easiest, and largest-error maps
 - `metrics.json`: MAE and R2 per target
 - `best_model.pt`: checkpoint for prediction, selected by `--checkpoint-metric` for neural runs

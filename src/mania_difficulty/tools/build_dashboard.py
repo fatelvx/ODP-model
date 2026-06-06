@@ -472,6 +472,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         link(run_dir / "run_report.html", "run report", out_html),
         link(run_dir / "last_checkpoint.pt", "last checkpoint", out_html),
         link(run_dir / "predictions.csv", "predictions", out_html),
+        link(run_dir / "prediction_summary.csv", "prediction summary", out_html),
         link(run_dir / "prediction_rankings.csv", "prediction rankings", out_html),
         link(run_dir / "human_review.csv", "human review", out_html),
         link(run_dir / "human_pair_review.csv", "pairwise review", out_html),
@@ -482,9 +483,11 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         link(run_dir / "attention_map.csv", "attention CSV", out_html),
         link(run_dir / "error_slices.csv", "error slices", out_html),
         link(run_dir / "cv_prediction_rankings.csv", "CV prediction rankings", out_html),
+        link(run_dir / "cv_prediction_summary.csv", "CV prediction summary", out_html),
         link(run_dir / "cv_human_review.csv", "CV human review", out_html),
         link(run_dir / "cv_human_pair_judgment_template.csv", "CV judgment template", out_html),
         link(run_dir / "cv_error_slices.csv", "CV error slices", out_html),
+        link(run_dir / "eval_prediction_summary.csv", "evaluation prediction summary", out_html),
     ]
     links_html = " ".join(item for item in links if item)
     images_html = "".join(

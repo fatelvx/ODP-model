@@ -24,6 +24,10 @@ class BuildDashboardTests(unittest.TestCase):
                 "ranking_section,rank,beatmap_id\npredicted_hardest,1,1\n",
                 encoding="utf-8",
             )
+            (run_dir / "prediction_summary.csv").write_text(
+                "target,count,bias,mae\nmean_acc,4,-0.02,0.1\n",
+                encoding="utf-8",
+            )
             (run_dir / "error_slices.csv").write_text(
                 "\n".join(
                     [
@@ -157,6 +161,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("last_checkpoint.pt", html)
         self.assertIn("prediction rankings", html)
         self.assertIn("prediction_rankings.csv", html)
+        self.assertIn("prediction summary", html)
+        self.assertIn("prediction_summary.csv", html)
         self.assertIn("learning_curve.png", html)
         self.assertIn("embedding_report.html", html)
         self.assertIn("embedding_projection.png", html)

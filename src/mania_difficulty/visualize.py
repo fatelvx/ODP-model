@@ -594,6 +594,11 @@ def csv_preview_html(path: Path, title: str, description: str, *, max_rows: int 
 def review_sections_html(run_dir: Path) -> str:
     sections = [
         csv_preview_html(
+            run_dir / "prediction_summary.csv",
+            "Prediction Summary",
+            "Target-level calibration summary: bias shows whether predictions are high or low on average.",
+        ),
+        csv_preview_html(
             run_dir / "prediction_rankings.csv",
             "Prediction Rankings",
             "Model outputs sorted into predicted hardest, predicted easiest, and largest-error maps for quick inspection.",
@@ -629,6 +634,11 @@ def review_sections_html(run_dir: Path) -> str:
             "Out-of-fold model outputs sorted into hardest, easiest, and largest-error maps.",
         ),
         csv_preview_html(
+            run_dir / "cv_prediction_summary.csv",
+            "Cross-Validation Prediction Summary",
+            "Out-of-fold target-level bias and error scale.",
+        ),
+        csv_preview_html(
             run_dir / "cv_human_pair_review.csv",
             "Cross-Validation Pairwise Human Review",
             "Out-of-fold map pairs where the model and proxy rank difficulty in opposite directions.",
@@ -652,6 +662,11 @@ def review_sections_html(run_dir: Path) -> str:
             run_dir / "eval_prediction_rankings.csv",
             "Evaluation Prediction Rankings",
             "Checkpoint model outputs sorted into hardest, easiest, and largest-error maps.",
+        ),
+        csv_preview_html(
+            run_dir / "eval_prediction_summary.csv",
+            "Evaluation Prediction Summary",
+            "Checkpoint target-level bias and error scale.",
         ),
         csv_preview_html(
             run_dir / "eval_human_pair_review.csv",

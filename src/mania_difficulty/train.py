@@ -612,6 +612,56 @@ def write_predictions(
         writer.writerows(rows)
 
 
+def prediction_summary_rows(predictions_csv: Path, target_columns: list[str]) -> list[dict[str, object]]:
+    predictions = pd.read_csv(predictions_csv)
+    rows: list[dict[str, object]] = []
+    for column in target_columns:
+        actual_column = f"actual_{column}"
+        pred_column = f"pred_{column}"
+        if actual_column not in predictions.columns or pred_column not in predictions.columns:
+            continue
+        frame = predictions[[actual_column, pred_column]].apply(pd.to_numeric, errors="coerce").dropna()
+        if frame.empty:
+            continue
+        actual = frame[actual_column]
+        predicted = frame[pred_column]
+        error = predicted - actual
+        abs_error = error.abs()
+        rows.append(
+            {
+                "target": column,
+                "count": int(frame.shape[0]),
+                "actual_mean": float(actual.mean()),
+                "pred_mean": float(predicted.mean()),
+                "bias": float(error.mean()),
+                "mae": float(abs_error.mean()),
+                "max_abs_error": float(abs_error.max()),
+                "actual_std": float(actual.std(ddof=0)),
+                "pred_std": float(predicted.std(ddof=0)),
+            }
+        )
+    return rows
+
+
+def write_prediction_summary(path: Path, predictions_csv: Path, target_columns: list[str]) -> None:
+    columns = [
+        "target",
+        "count",
+        "actual_mean",
+        "pred_mean",
+        "bias",
+        "mae",
+        "max_abs_error",
+        "actual_std",
+        "pred_std",
+    ]
+    pd.DataFrame(prediction_summary_rows(predictions_csv, target_columns), columns=columns).to_csv(
+        path,
+        index=False,
+        encoding="utf-8",
+    )
+
+
 def write_prediction_rankings(
     path: Path,
     labels_csv: Path,
@@ -959,6 +1009,7 @@ def write_tabular_cross_validation(
 
     cv_predictions_csv = run_dir / "cv_predictions.csv"
     write_predictions(cv_predictions_csv, beatmap_ids, y_all, oof_pred, target_columns)
+    write_prediction_summary(run_dir / "cv_prediction_summary.csv", cv_predictions_csv, target_columns)
     write_prediction_rankings(
         run_dir / "cv_prediction_rankings.csv",
         args.labels,
@@ -1078,6 +1129,7 @@ def train_tabular_forest(
 
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, y_test, test_pred, target_columns)
+    write_prediction_summary(run_dir / "prediction_summary.csv", predictions_csv, target_columns)
     write_prediction_rankings(
         run_dir / "prediction_rankings.csv",
         args.labels,
@@ -1465,6 +1517,7 @@ def train(args: argparse.Namespace) -> Path:
     )
     predictions_csv = run_dir / "predictions.csv"
     write_predictions(predictions_csv, beatmap_ids, actual, pred, target_columns)
+    write_prediction_summary(run_dir / "prediction_summary.csv", predictions_csv, target_columns)
     write_prediction_rankings(
         run_dir / "prediction_rankings.csv",
         args.labels,

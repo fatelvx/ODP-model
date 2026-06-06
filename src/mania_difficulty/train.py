@@ -15,7 +15,6 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.ensemble import ExtraTreesRegressor
-from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 
 from mania_difficulty.data.dataset import (
@@ -48,6 +47,83 @@ def split_indices(size: int, seed: int) -> tuple[list[int], list[int], list[int]
     train_end = int(size * 0.8)
     val_end = int(size * 0.9)
     return indices[:train_end], indices[train_end:val_end], indices[val_end:]
+
+
+def split_indices_by_group(groups: list[str], seed: int) -> tuple[list[int], list[int], list[int]]:
+    unique_groups = sorted(set(groups))
+    if len(unique_groups) < 3:
+        raise RuntimeError("Need at least 3 unique groups for grouped train/val/test split.")
+
+    random.Random(seed).shuffle(unique_groups)
+    group_count = len(unique_groups)
+    test_count = max(1, round(group_count * 0.1))
+    val_count = max(1, round(group_count * 0.1))
+    if test_count + val_count >= group_count:
+        test_count = 1
+        val_count = 1
+    train_count = group_count - val_count - test_count
+
+    train_groups = set(unique_groups[:train_count])
+    val_groups = set(unique_groups[train_count : train_count + val_count])
+    test_groups = set(unique_groups[train_count + val_count :])
+    return (
+        [index for index, group in enumerate(groups) if group in train_groups],
+        [index for index, group in enumerate(groups) if group in val_groups],
+        [index for index, group in enumerate(groups) if group in test_groups],
+    )
+
+
+def cross_validation_splits(
+    size: int,
+    *,
+    groups: list[str] | None,
+    folds: int,
+    seed: int,
+) -> list[tuple[list[int], list[int]]]:
+    if folds < 2:
+        return []
+    indices = list(range(size))
+    if groups and len(set(groups)) >= folds:
+        unique_groups = sorted(set(groups))
+        random.Random(seed).shuffle(unique_groups)
+        group_sizes = {group: groups.count(group) for group in unique_groups}
+        unique_groups.sort(key=lambda group: group_sizes[group], reverse=True)
+        fold_group_sets = [set() for _ in range(folds)]
+        fold_sizes = [0 for _ in range(folds)]
+        for group in unique_groups:
+            fold_index = min(range(folds), key=lambda index: fold_sizes[index])
+            fold_group_sets[fold_index].add(group)
+            fold_sizes[fold_index] += group_sizes[group]
+        return [
+            (
+                [index for index in indices if groups[index] not in val_groups],
+                [index for index in indices if groups[index] in val_groups],
+            )
+            for val_groups in fold_group_sets
+        ]
+
+    random.Random(seed).shuffle(indices)
+    shuffled_splits = np.array_split(np.asarray(indices), folds)
+    return [
+        (
+            [index for index in indices if index not in set(val_indices.tolist())],
+            val_indices.tolist(),
+        )
+        for val_indices in shuffled_splits
+    ]
+
+
+def dataset_groups(dataset: ManiaDifficultyDataset, group_column: str) -> list[str] | None:
+    if not group_column or group_column not in dataset.labels.columns:
+        return None
+
+    groups = []
+    for row_index, row in dataset.labels.reset_index(drop=True).iterrows():
+        value = row.get(group_column)
+        if pd.isna(value) or value == "":
+            value = f"__row_{row_index}"
+        groups.append(str(value))
+    return groups if len(set(groups)) >= 3 else None
 
 
 def target_stats(dataset: ManiaDifficultyDataset, indices: list[int]) -> tuple[np.ndarray, np.ndarray]:
@@ -283,6 +359,7 @@ def write_tabular_cross_validation(
     dataset: ManiaDifficultyDataset,
     target_columns: list[str],
     run_dir: Path,
+    groups: list[str] | None,
 ) -> None:
     if args.cv_folds < 2:
         return
@@ -295,17 +372,26 @@ def write_tabular_cross_validation(
     oof_baseline = np.zeros_like(y_all, dtype="float32")
     fold_rows: list[dict[str, object]] = []
 
-    splitter = KFold(n_splits=args.cv_folds, shuffle=True, random_state=args.seed)
-    for fold_index, (train_idx, val_idx) in enumerate(splitter.split(x_all), start=1):
+    split_strategy = (
+        f"group:{args.group_column}"
+        if groups and len(set(groups)) >= args.cv_folds
+        else "random_map"
+    )
+    for fold_index, (train_idx, val_idx) in enumerate(
+        cross_validation_splits(len(dataset), groups=groups, folds=args.cv_folds, seed=args.seed),
+        start=1,
+    ):
+        train_idx_array = np.asarray(train_idx, dtype=int)
+        val_idx_array = np.asarray(val_idx, dtype=int)
         model = create_tabular_forest_model(args, seed=args.seed + fold_index)
-        model.fit(x_all[train_idx], y_all[train_idx])
-        fold_pred = model.predict(x_all[val_idx]).astype("float32")
-        fold_baseline = repeat_baseline(y_all[val_idx], y_all[train_idx].mean(axis=0))
-        oof_pred[val_idx] = fold_pred
-        oof_baseline[val_idx] = fold_baseline
+        model.fit(x_all[train_idx_array], y_all[train_idx_array])
+        fold_pred = model.predict(x_all[val_idx_array]).astype("float32")
+        fold_baseline = repeat_baseline(y_all[val_idx_array], y_all[train_idx_array].mean(axis=0))
+        oof_pred[val_idx_array] = fold_pred
+        oof_baseline[val_idx_array] = fold_baseline
 
         fold_report = regression_report(
-            y_all[val_idx],
+            y_all[val_idx_array],
             fold_pred,
             target_columns,
             baseline_pred=fold_baseline,
@@ -315,7 +401,7 @@ def write_tabular_cross_validation(
                 {
                     "fold": fold_index,
                     "target": target,
-                    "val_size": len(val_idx),
+                    "val_size": len(val_idx_array),
                     **fold_report[target],
                 }
             )
@@ -336,6 +422,9 @@ def write_tabular_cross_validation(
         "seed": args.seed,
         "evaluation": "cv_oof",
         "cv_folds": args.cv_folds,
+        "split_strategy": split_strategy,
+        "group_column": args.group_column if split_strategy.startswith("group:") else "",
+        "group_count": len(set(groups)) if groups else 0,
         "sample_size": len(dataset),
     }
     (run_dir / "cv_metrics.json").write_text(json.dumps(cv_metrics, indent=2), encoding="utf-8")
@@ -351,6 +440,8 @@ def train_tabular_forest(
     train_indices: list[int],
     val_indices: list[int],
     test_indices: list[int],
+    split_metadata: dict[str, object],
+    groups: list[str] | None,
 ) -> Path:
     x_train, y_train, _ = tabular_arrays(dataset, train_indices, max_notes=args.max_notes)
     x_val, y_val, _ = tabular_arrays(dataset, val_indices, max_notes=args.max_notes)
@@ -392,6 +483,7 @@ def train_tabular_forest(
         "model_name": args.model,
         "seed": args.seed,
         "evaluation": "holdout",
+        **split_metadata,
         "best_epoch": 1,
         "best_val_loss": val_loss,
         "test_loss": test_loss,
@@ -408,7 +500,7 @@ def train_tabular_forest(
     plot_feature_importance(feature_importance_csv, run_dir / "feature_importance.png")
     plot_learning_curve(history_csv, run_dir / "learning_curve.png")
     plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
-    write_tabular_cross_validation(args, dataset, target_columns, run_dir)
+    write_tabular_cross_validation(args, dataset, target_columns, run_dir, groups)
     write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
 
     (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2, default=str), encoding="utf-8")
@@ -426,7 +518,21 @@ def train(args: argparse.Namespace) -> Path:
     if len(dataset) < 10:
         raise RuntimeError("Need at least 10 maps for train/val/test split.")
 
-    train_indices, val_indices, test_indices = split_indices(len(dataset), args.seed)
+    groups = dataset_groups(dataset, args.group_column)
+    if groups:
+        train_indices, val_indices, test_indices = split_indices_by_group(groups, args.seed)
+        split_metadata: dict[str, object] = {
+            "split_strategy": f"group:{args.group_column}",
+            "group_column": args.group_column,
+            "group_count": len(set(groups)),
+        }
+    else:
+        train_indices, val_indices, test_indices = split_indices(len(dataset), args.seed)
+        split_metadata = {
+            "split_strategy": "random_map",
+            "group_column": "",
+            "group_count": 0,
+        }
     if args.model == "tabular_forest":
         return train_tabular_forest(
             args,
@@ -436,6 +542,8 @@ def train(args: argparse.Namespace) -> Path:
             train_indices,
             val_indices,
             test_indices,
+            split_metadata,
+            groups,
         )
 
     target_mean_np, target_std_np = target_stats(dataset, train_indices)
@@ -553,6 +661,7 @@ def train(args: argparse.Namespace) -> Path:
         "model_name": args.model,
         "seed": args.seed,
         "evaluation": "holdout",
+        **split_metadata,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "test_loss": test_loss,
@@ -584,6 +693,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--max-notes", type=int, default=3000)
+    parser.add_argument(
+        "--group-column",
+        default="beatmapset_id",
+        help="Group-aware splitting column. Defaults to beatmapset_id to avoid same-set leakage.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="")
     parser.add_argument(

@@ -66,6 +66,7 @@ python -m mania_difficulty.train `
   --sequences data/processed/synthetic/sequences `
   --model tabular_forest `
   --cv-folds 5 `
+  --group-column beatmapset_id `
   --run-name synthetic_forest_smoke
 ```
 
@@ -92,6 +93,11 @@ Metrics include a train-mean baseline when available:
 - `baseline_mae`: MAE from predicting the training mean for that target
 - `mae_improvement_vs_baseline`: positive means the model beat that baseline
 - `mae_improvement_pct`: the same improvement as a percent
+
+When the label file has `beatmapset_id`, train/validation/test and
+cross-validation splits keep the same beatmapset in only one split. This avoids
+overstating performance by testing on another difficulty from a mapset the
+model already saw.
 
 ## Real Data Pipeline
 
@@ -142,6 +148,7 @@ python -m mania_difficulty.train `
   --sequences data/processed/sequences `
   --model tabular_forest `
   --cv-folds 5 `
+  --group-column beatmapset_id `
   --run-name forest_top100_baseline
 ```
 

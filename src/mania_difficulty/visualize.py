@@ -99,9 +99,21 @@ def write_run_report(
     feature_importance_name: str = "feature_importance.png",
 ) -> None:
     metrics_html = "<p>No metrics yet.</p>"
+    run_info_html = ""
     if metrics_path and metrics_path.exists():
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
         metrics_html = metrics_table_html(metrics, target_columns)
+        run_info = metrics.get("_run", {})
+        if run_info:
+            run_info_html = (
+                "<table><tbody>"
+                f"<tr><th>Model</th><td>{html.escape(str(run_info.get('model_name', '')))}</td></tr>"
+                f"<tr><th>Evaluation</th><td>{html.escape(str(run_info.get('evaluation', '')))}</td></tr>"
+                f"<tr><th>Split</th><td>{html.escape(str(run_info.get('split_strategy', '')))}</td></tr>"
+                f"<tr><th>Group Column</th><td>{html.escape(str(run_info.get('group_column', '')))}</td></tr>"
+                f"<tr><th>Group Count</th><td>{html.escape(str(run_info.get('group_count', '')))}</td></tr>"
+                "</tbody></table>"
+            )
 
     cv_html = ""
     cv_metrics_path = run_dir / "cv_metrics.json"
@@ -150,6 +162,7 @@ def write_run_report(
 <body>
   <h1>osu!mania Difficulty Model Run</h1>
   <p>Run directory: <code>{html.escape(str(run_dir))}</code></p>
+  {run_info_html}
   <h2>Metrics</h2>
   {metrics_html}
   {cv_html}

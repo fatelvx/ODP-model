@@ -121,7 +121,7 @@ Each run saves:
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
 - `cv_prediction_rankings.csv`: cross-validation predicted hardest, easiest, and largest-error maps
 - `metrics.json`: MAE and R2 per target
-- `best_model.pt`: checkpoint for prediction
+- `best_model.pt`: checkpoint for prediction, selected by `--checkpoint-metric` for neural runs
 - `last_checkpoint.pt`: neural training state for `--resume`
 
 Metrics include a train-mean baseline when available:
@@ -230,9 +230,15 @@ python -m mania_difficulty.train `
   --sequences data/processed/sequences `
   --epochs 50 `
   --batch-size 32 `
+  --checkpoint-metric val_mean_mae `
   --model lstm `
   --run-name lstm_top100_baseline
 ```
+
+For neural runs, `--checkpoint-metric` controls which epoch becomes
+`best_model.pt` and drives early stopping. Use `val_mean_mae` for the most
+readable validation error, or `val_mean_pairwise_order_accuracy` when the
+priority is ranking map pairs in the same harder/easier direction.
 
 For local CPU pilots, use `--model summary`. It is much faster and is meant to
 prove the data/label signal before spending GPU time. Use `--model
@@ -287,6 +293,7 @@ python -m mania_difficulty.tools.sweep_neural `
   --patience 6 `
   --batch-size 32 `
   --grad-accum-steps 1 `
+  --checkpoint-metric val_mean_mae `
   --lrs 0.001,0.0005 `
   --weight-decays 0.0001 `
   --lstm-embed-dims 32,64 `
@@ -404,7 +411,10 @@ final neural run is interrupted, re-run the final training cell with
 `RESUME_FINAL_TRAINING = True` to continue from `last_checkpoint.pt`. To survive
 a full Colab runtime reset, set `USE_DRIVE_CHECKPOINT_BACKUP = True`; the final
 training command will use `--checkpoint-backup-dir` to sync checkpoints to
-Google Drive and restore them before resume.
+Google Drive and restore them before resume. The notebook sets
+`CHECKPOINT_METRIC = "val_mean_mae"` by default; change it to
+`"val_mean_pairwise_order_accuracy"` if you want the best checkpoint chosen by
+harder/easier ranking agreement instead of absolute validation error.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.

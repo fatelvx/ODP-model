@@ -390,6 +390,15 @@ def model_verdict_html(
     return f"<{heading_tag}>Model Verdict</{heading_tag}><table><tbody>{row_html}</tbody></table>"
 
 
+def checkpoint_score_text(metric: object, score: object) -> str:
+    parsed = metric_float(score)
+    if parsed is None:
+        return str(score)
+    if str(metric) == "val_mean_pairwise_order_accuracy":
+        return f"{parsed:.2%}"
+    return f"{parsed:.6f}"
+
+
 def csv_preview_html(path: Path, title: str, description: str, *, max_rows: int = 20) -> str:
     if not path.exists():
         return ""
@@ -507,6 +516,8 @@ def write_run_report(
         verdict_html = model_verdict_html(metrics, target_columns)
         run_info = metrics.get("_run", {})
         if run_info:
+            checkpoint_metric = run_info.get("checkpoint_metric", "")
+            best_checkpoint_score = run_info.get("best_checkpoint_score", "")
             model_config = run_info.get("model_config", "")
             if isinstance(model_config, dict):
                 model_config = json.dumps(model_config, ensure_ascii=False)
@@ -521,6 +532,9 @@ def write_run_report(
                 f"<tr><th>Batch Size</th><td>{html.escape(str(run_info.get('batch_size', '')))}</td></tr>"
                 f"<tr><th>Grad Accum Steps</th><td>{html.escape(str(run_info.get('grad_accum_steps', '')))}</td></tr>"
                 f"<tr><th>Effective Batch Size</th><td>{html.escape(str(run_info.get('effective_batch_size', '')))}</td></tr>"
+                f"<tr><th>Checkpoint Metric</th><td>{html.escape(str(checkpoint_metric))}</td></tr>"
+                f"<tr><th>Best Checkpoint Score</th><td>{html.escape(checkpoint_score_text(checkpoint_metric, best_checkpoint_score))}</td></tr>"
+                f"<tr><th>Checkpoint Best Epoch</th><td>{html.escape(str(run_info.get('best_epoch', '')))}</td></tr>"
                 f"<tr><th>Resume</th><td>{html.escape(str(run_info.get('resume', '')))}</td></tr>"
                 f"<tr><th>Resumed From Epoch</th><td>{html.escape(str(run_info.get('resumed_from_epoch', '')))}</td></tr>"
                 f"<tr><th>Last Checkpoint</th><td>{html.escape(str(run_info.get('last_checkpoint', '')))}</td></tr>"

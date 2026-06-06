@@ -12,6 +12,7 @@ import pandas as pd
 from mania_difficulty.human_judgments import score_pair_judgments
 from mania_difficulty.tools.compare_runs import run_metrics_rows
 from mania_difficulty.visualize import (
+    checkpoint_score_text,
     model_verdict_html,
     training_health_html,
     training_performance_html,
@@ -210,6 +211,30 @@ def run_verdict_html(run_dir: Path) -> str:
     return model_verdict_html(metrics, heading_level=4)
 
 
+def checkpoint_selection_html(run_dir: Path) -> str:
+    metrics = load_json(run_dir / "metrics.json")
+    run_info = metrics.get("_run", {})
+    if not isinstance(run_info, dict):
+        return ""
+    checkpoint_metric = run_info.get("checkpoint_metric", "")
+    if not checkpoint_metric:
+        return ""
+    rows = [
+        ("Checkpoint Metric", checkpoint_metric),
+        (
+            "Best Checkpoint Score",
+            checkpoint_score_text(checkpoint_metric, run_info.get("best_checkpoint_score", "")),
+        ),
+    ]
+    if "best_epoch" in run_info:
+        rows.append(("Best Epoch", run_info["best_epoch"]))
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<h4>Checkpoint Selection</h4><table><tbody>{row_html}</tbody></table>"
+
+
 def run_card(run_dir: Path, out_html: Path) -> str:
     links = [
         link(run_dir / "run_report.html", "run report", out_html),
@@ -244,6 +269,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         f'<section class="run-card"><h3>{html.escape(run_dir.name)}</h3>'
         f"<p>{links_html}</p>"
         f"{run_verdict_html(run_dir)}"
+        f"{checkpoint_selection_html(run_dir)}"
         f"{human_judgment_table(run_dir)}"
         f"{training_health_html(run_dir / 'history.csv', heading_level=4)}"
         f"{training_performance_html(run_dir / 'history.csv', heading_level=4)}"

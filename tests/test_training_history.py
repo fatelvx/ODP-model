@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from mania_difficulty.train import append_history, write_history_header
+from mania_difficulty.train import (
+    append_history,
+    checkpoint_metric_improved,
+    checkpoint_metric_score,
+    write_history_header,
+)
 
 
 class TrainingHistoryTests(unittest.TestCase):
@@ -65,6 +70,27 @@ class TrainingHistoryTests(unittest.TestCase):
         self.assertTrue(pd.isna(history.loc[0, "val_mean_pairwise_order_accuracy"]))
         self.assertTrue(pd.isna(history.loc[0, "epoch_seconds"]))
         self.assertEqual(float(history.loc[1, "epoch_seconds"]), 2.0)
+
+    def test_checkpoint_metric_score_uses_metric_direction(self):
+        metrics = {
+            "val_mean_mae": 0.12,
+            "val_mean_pairwise_order_accuracy": 0.75,
+        }
+
+        self.assertEqual(checkpoint_metric_score("val_loss", 0.4, metrics), 0.4)
+        self.assertEqual(checkpoint_metric_score("val_mean_mae", 0.4, metrics), 0.12)
+        self.assertEqual(
+            checkpoint_metric_score("val_mean_pairwise_order_accuracy", 0.4, metrics),
+            0.75,
+        )
+        self.assertTrue(checkpoint_metric_improved("val_mean_mae", 0.11, 0.12))
+        self.assertFalse(checkpoint_metric_improved("val_mean_mae", 0.13, 0.12))
+        self.assertTrue(
+            checkpoint_metric_improved("val_mean_pairwise_order_accuracy", 0.8, 0.75)
+        )
+        self.assertFalse(
+            checkpoint_metric_improved("val_mean_pairwise_order_accuracy", 0.7, 0.75)
+        )
 
 
 if __name__ == "__main__":

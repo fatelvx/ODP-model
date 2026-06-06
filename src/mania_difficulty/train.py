@@ -64,6 +64,12 @@ CHECKPOINT_BACKUP_FILENAMES = [
     "config.json",
 ]
 
+CHECKPOINT_METRICS = {
+    "val_loss": "min",
+    "val_mean_mae": "min",
+    "val_mean_pairwise_order_accuracy": "max",
+}
+
 
 def seed_everything(seed: int) -> None:
     random.seed(seed)
@@ -430,6 +436,31 @@ def validation_history_metrics(
             float(np.mean(pairwise_values)) if pairwise_values else 0.0
         ),
     }
+
+
+def checkpoint_metric_initial_score(metric: str) -> float:
+    direction = CHECKPOINT_METRICS[metric]
+    return float("-inf") if direction == "max" else float("inf")
+
+
+def checkpoint_metric_score(
+    metric: str,
+    val_loss: float,
+    val_history_metrics: dict[str, float],
+) -> float:
+    if metric == "val_loss":
+        return float(val_loss)
+    if metric not in val_history_metrics:
+        raise KeyError(f"Validation metric {metric!r} was not computed for this epoch.")
+    return float(val_history_metrics[metric])
+
+
+def checkpoint_metric_improved(metric: str, current_score: float, best_score: float) -> bool:
+    if not np.isfinite(current_score):
+        return False
+    if CHECKPOINT_METRICS[metric] == "max":
+        return current_score > best_score
+    return current_score < best_score
 
 
 def write_predictions(
@@ -1042,7 +1073,9 @@ def train(args: argparse.Namespace) -> Path:
         loss_weights = torch.ones(len(target_columns), dtype=torch.float32, device=device)
 
     history_csv = run_dir / "history.csv"
+    checkpoint_metric = getattr(args, "checkpoint_metric", "val_loss")
     best_val_loss = float("inf")
+    best_checkpoint_score = checkpoint_metric_initial_score(checkpoint_metric)
     best_epoch = 0
     patience_left = args.patience
     checkpoint_path = run_dir / "best_model.pt"
@@ -1073,8 +1106,30 @@ def train(args: argparse.Namespace) -> Path:
         if scaler_state:
             scaler.load_state_dict(scaler_state)
         best_val_loss = float(resume_checkpoint.get("best_val_loss", best_val_loss))
+        resumed_checkpoint_metric = resume_checkpoint.get("checkpoint_metric")
+        if resumed_checkpoint_metric == checkpoint_metric:
+            best_checkpoint_score = float(
+                resume_checkpoint.get("best_checkpoint_score", best_checkpoint_score)
+            )
+        elif resumed_checkpoint_metric is None and checkpoint_metric == "val_loss":
+            best_checkpoint_score = best_val_loss
+        elif resumed_checkpoint_metric:
+            print(
+                f"Resume checkpoint used checkpoint_metric={resumed_checkpoint_metric}; "
+                f"requested {checkpoint_metric}. Future epochs will use {checkpoint_metric}."
+            )
+            patience_left = args.patience
+        else:
+            print(
+                f"Resume checkpoint did not record checkpoint_metric; "
+                f"future epochs will use {checkpoint_metric}."
+            )
+            patience_left = args.patience
         best_epoch = int(resume_checkpoint.get("best_epoch", best_epoch))
-        patience_left = int(resume_checkpoint.get("patience_left", patience_left))
+        if resumed_checkpoint_metric == checkpoint_metric or (
+            resumed_checkpoint_metric is None and checkpoint_metric == "val_loss"
+        ):
+            patience_left = int(resume_checkpoint.get("patience_left", patience_left))
         resumed_from_epoch = int(resume_checkpoint.get("epoch", 0))
         start_epoch = resumed_from_epoch + 1
         if not history_csv.exists():
@@ -1128,6 +1183,13 @@ def train(args: argparse.Namespace) -> Path:
             amp_active,
         )
         val_history_metrics = validation_history_metrics(val_actual, val_pred, target_columns)
+        current_checkpoint_score = checkpoint_metric_score(
+            checkpoint_metric,
+            val_loss,
+            val_history_metrics,
+        )
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
         if device.type == "cuda":
             torch.cuda.synchronize(device)
             cuda_max_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 * 1024)
@@ -1153,11 +1215,12 @@ def train(args: argparse.Namespace) -> Path:
             f"epoch={epoch:03d} train_loss={train_loss:.5f} val_loss={val_loss:.5f} "
             f"val_mae={val_history_metrics['val_mean_mae']:.5f} "
             f"val_pairwise={val_history_metrics['val_mean_pairwise_order_accuracy']:.2%} "
+            f"checkpoint_metric={checkpoint_metric} checkpoint_score={current_checkpoint_score:.5f} "
             f"epoch_seconds={epoch_seconds:.2f} lr={epoch_lr:.6g}{memory_text}"
         )
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if checkpoint_metric_improved(checkpoint_metric, current_checkpoint_score, best_checkpoint_score):
+            best_checkpoint_score = current_checkpoint_score
             best_epoch = epoch
             patience_left = args.patience
             torch.save(
@@ -1170,6 +1233,9 @@ def train(args: argparse.Namespace) -> Path:
                     "target_std": target_std_np.tolist(),
                     "max_notes": args.max_notes,
                     "best_epoch": best_epoch,
+                    "checkpoint_metric": checkpoint_metric,
+                    "best_checkpoint_score": best_checkpoint_score,
+                    "best_val_loss": best_val_loss,
                 },
                 checkpoint_path,
             )
@@ -1190,6 +1256,8 @@ def train(args: argparse.Namespace) -> Path:
                 "max_notes": args.max_notes,
                 "best_epoch": best_epoch,
                 "best_val_loss": best_val_loss,
+                "checkpoint_metric": checkpoint_metric,
+                "best_checkpoint_score": best_checkpoint_score,
                 "patience_left": patience_left,
             },
             last_checkpoint_path,
@@ -1240,6 +1308,8 @@ def train(args: argparse.Namespace) -> Path:
         **split_metadata,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
+        "checkpoint_metric": checkpoint_metric,
+        "best_checkpoint_score": best_checkpoint_score,
         "test_loss": test_loss,
         "amp": getattr(args, "amp", "auto"),
         "amp_enabled": amp_active,
@@ -1299,6 +1369,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument(
+        "--checkpoint-metric",
+        choices=sorted(CHECKPOINT_METRICS),
+        default="val_loss",
+        help=(
+            "Validation metric used for neural best_model.pt and early stopping. "
+            "Use val_mean_mae for easiest-to-read error, or "
+            "val_mean_pairwise_order_accuracy when rank direction matters most."
+        ),
+    )
     parser.add_argument("--max-notes", type=int, default=3000)
     parser.add_argument(
         "--group-column",

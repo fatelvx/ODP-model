@@ -72,7 +72,13 @@ class BuildDashboardTests(unittest.TestCase):
                             "mae_improvement_vs_baseline": -0.1,
                             "mae_improvement_pct": -1.0,
                         },
-                        "_run": {"model_name": "summary", "evaluation": "holdout", "seed": 42},
+                        "_run": {
+                            "model_name": "summary",
+                            "evaluation": "holdout",
+                            "seed": 42,
+                            "checkpoint_metric": "val_mean_pairwise_order_accuracy",
+                            "best_checkpoint_score": 0.72,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -146,6 +152,10 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Model Verdict", html)
         self.assertIn("Targets Beating Baseline", html)
         self.assertIn("Weakest Target", html)
+        self.assertIn("Checkpoint Selection", html)
+        self.assertIn("Checkpoint Metric", html)
+        self.assertIn("val_mean_pairwise_order_accuracy", html)
+        self.assertIn("72.00%", html)
 
 
 if __name__ == "__main__":

@@ -91,6 +91,9 @@ class RunReportTests(unittest.TestCase):
                             "batch_size": 8,
                             "grad_accum_steps": 2,
                             "effective_batch_size": 16,
+                            "checkpoint_metric": "val_mean_pairwise_order_accuracy",
+                            "best_checkpoint_score": 0.72,
+                            "best_epoch": 2,
                             "resume": True,
                             "resumed_from_epoch": 2,
                             "checkpoint_backup_dir": "drive/checkpoints/run_a",
@@ -118,6 +121,11 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Grad Accum Steps", report)
         self.assertIn("Effective Batch Size", report)
         self.assertIn("16", report)
+        self.assertIn("Checkpoint Metric", report)
+        self.assertIn("val_mean_pairwise_order_accuracy", report)
+        self.assertIn("Best Checkpoint Score", report)
+        self.assertIn("<tr><th>Best Checkpoint Score</th><td>72.00%</td></tr>", report)
+        self.assertIn("Checkpoint Best Epoch", report)
         self.assertIn("Training Health", report)
         self.assertIn("Best Epoch", report)
         self.assertIn("Best Val MAE", report)

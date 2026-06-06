@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
-from mania_difficulty.train import positive_int, train
+from mania_difficulty.train import CHECKPOINT_METRICS, positive_int, train
 from mania_difficulty.tools.sweep_selection import (
     parse_selection_metric,
     selection_sort_ascending,
@@ -219,6 +219,7 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         loader_prefetch_factor=base_args.loader_prefetch_factor,
         amp=base_args.amp,
         grad_accum_steps=getattr(base_args, "grad_accum_steps", 1),
+        checkpoint_metric=getattr(base_args, "checkpoint_metric", "val_loss"),
         checkpoint_backup_dir=getattr(base_args, "checkpoint_backup_dir", None),
         lstm_embed_dim=int(candidate.get("lstm_embed_dim", base_args.lstm_embed_dims[0])),
         lstm_hidden_dim=int(candidate.get("lstm_hidden_dim", base_args.lstm_hidden_dims[0])),
@@ -295,6 +296,8 @@ def summarize_run(
         "mean_improvement_pct": float(np.mean([row["mae_improvement_pct"] for row in rows])),
         "best_epoch": run_info.get("best_epoch"),
         "best_val_loss": run_info.get("best_val_loss"),
+        "checkpoint_metric": run_info.get("checkpoint_metric"),
+        "best_checkpoint_score": run_info.get("best_checkpoint_score"),
         "test_loss": run_info.get("test_loss"),
         "split_strategy": run_info.get("split_strategy"),
         "group_column": run_info.get("group_column"),
@@ -389,6 +392,12 @@ def main() -> None:
         type=Path,
         default=None,
         help="Optional base directory for backing up each candidate's neural checkpoints.",
+    )
+    parser.add_argument(
+        "--checkpoint-metric",
+        choices=sorted(CHECKPOINT_METRICS),
+        default="val_loss",
+        help="Validation metric used inside each candidate run for best checkpoint and early stopping.",
     )
     parser.add_argument("--summary-hidden-dims", type=parse_int_list, default=[96, 128, 192])
     parser.add_argument("--summary-dropouts", type=parse_float_list, default=[0.1, 0.2, 0.35])

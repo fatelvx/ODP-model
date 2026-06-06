@@ -98,6 +98,8 @@ class BuildDashboardTests(unittest.TestCase):
                             "amp_enabled": True,
                             "effective_batch_size": 64,
                             "sample_weight_column": "score_count",
+                            "sample_weight_train_mean": 0.72,
+                            "sample_weight_train_downweighted_rate": 0.4,
                             "epochs_completed": 3,
                             "stop_reason": "early_stopping",
                             "early_stopped": True,
@@ -176,6 +178,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("effective_batch_size", decision_summary)
         self.assertIn("sample_weight_column", decision_summary)
         self.assertIn("score_count", decision_summary)
+        self.assertIn("sample_weight_train_mean", decision_summary)
+        self.assertIn("sample_weight_train_downweighted_rate", decision_summary)
+        self.assertIn("0.72", decision_summary)
         self.assertIn("epochs_completed", decision_summary)
         self.assertIn("stop_reason", decision_summary)
         self.assertIn("early_stopped", decision_summary)

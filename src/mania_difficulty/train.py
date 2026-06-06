@@ -24,6 +24,7 @@ from mania_difficulty.data.dataset import (
     DEFAULT_TARGET_COLUMNS,
     ManiaDifficultyDataset,
     collate_batch,
+    label_sample_weight,
 )
 from mania_difficulty.error_analysis import write_error_slices
 from mania_difficulty.human_judgments import write_pair_judgment_template
@@ -310,6 +311,37 @@ def sample_weight_metadata(args: argparse.Namespace) -> dict[str, object]:
         "sample_weight_column": getattr(args, "sample_weight_column", ""),
         "sample_weight_min": getattr(args, "sample_weight_min", ""),
         "sample_weight_max_value": getattr(args, "sample_weight_max_value", ""),
+    }
+
+
+def sample_weight_summary(
+    dataset: ManiaDifficultyDataset,
+    indices: list[int],
+    *,
+    prefix: str,
+) -> dict[str, object]:
+    column = getattr(dataset, "sample_weight_column", "")
+    if not column or not indices:
+        return {}
+    weights = np.asarray(
+        [
+            label_sample_weight(
+                dataset.labels.iloc[index][column],
+                min_weight=dataset.sample_weight_min,
+                max_value=dataset.sample_weight_max_value,
+            )
+            for index in indices
+        ],
+        dtype="float32",
+    )
+    downweighted = weights < 1.0
+    return {
+        f"sample_weight_{prefix}_count": int(weights.shape[0]),
+        f"sample_weight_{prefix}_mean": float(weights.mean()),
+        f"sample_weight_{prefix}_min": float(weights.min()),
+        f"sample_weight_{prefix}_max": float(weights.max()),
+        f"sample_weight_{prefix}_downweighted_count": int(downweighted.sum()),
+        f"sample_weight_{prefix}_downweighted_rate": float(downweighted.mean()),
     }
 
 
@@ -960,6 +992,7 @@ def write_tabular_cross_validation(
         "feature_set": args.feature_set,
         **runtime_environment_metadata(args, torch.device("cpu")),
         **sample_weight_metadata(args),
+        **sample_weight_summary(dataset, list(range(len(dataset))), prefix="train"),
         "cv_folds": args.cv_folds,
         "split_strategy": split_strategy,
         "group_column": args.group_column if split_strategy.startswith("group:") else "",
@@ -1079,6 +1112,7 @@ def train_tabular_forest(
         "feature_set": args.feature_set,
         **runtime_environment_metadata(args, torch.device("cpu")),
         **sample_weight_metadata(args),
+        **sample_weight_summary(dataset, train_indices, prefix="train"),
         **split_metadata,
         "best_epoch": 1,
         "best_val_loss": val_loss,
@@ -1461,6 +1495,7 @@ def train(args: argparse.Namespace) -> Path:
         "model_config": model.config,
         **runtime_environment_metadata(args, device),
         **sample_weight_metadata(args),
+        **sample_weight_summary(dataset, train_indices, prefix="train"),
         **split_metadata,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,

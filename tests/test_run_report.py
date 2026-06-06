@@ -137,6 +137,10 @@ class RunReportTests(unittest.TestCase):
                             "sample_weight_column": "score_count",
                             "sample_weight_min": 0.25,
                             "sample_weight_max_value": 100.0,
+                            "sample_weight_train_mean": 0.72,
+                            "sample_weight_train_min": 0.25,
+                            "sample_weight_train_downweighted_rate": 0.4,
+                            "sample_weight_train_downweighted_count": 8,
                             "checkpoint_metric": "val_mean_pairwise_order_accuracy",
                             "best_checkpoint_score": 0.72,
                             "best_epoch": 2,
@@ -188,6 +192,12 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("score_count", report)
         self.assertIn("Sample Weight Min", report)
         self.assertIn("Sample Weight Max Value", report)
+        self.assertIn("Sample Weight Train Mean", report)
+        self.assertIn("0.720000", report)
+        self.assertIn("Sample Weight Train Min", report)
+        self.assertIn("Sample Weight Train Downweighted Rate", report)
+        self.assertIn("40.00%", report)
+        self.assertIn("Sample Weight Train Downweighted Count", report)
         self.assertIn("Checkpoint Metric", report)
         self.assertIn("val_mean_pairwise_order_accuracy", report)
         self.assertIn("Best Checkpoint Score", report)

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
+from mania_difficulty.train import sample_weight_summary
 
 
 class SampleWeightTests(unittest.TestCase):
@@ -60,6 +61,41 @@ class SampleWeightTests(unittest.TestCase):
         )
 
         self.assertEqual(batch.sample_weights.tolist(), [0.5, 1.0])
+
+    def test_sample_weight_summary_counts_downweighted_training_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sequences = root / "sequences"
+            sequences.mkdir()
+            for beatmap_id in [1, 2, 3]:
+                np.save(sequences / f"{beatmap_id}.npy", np.ones((2, 6), dtype=np.float32))
+            labels = root / "labels.csv"
+            labels.write_text(
+                "\n".join(
+                    [
+                        "beatmap_id,mean_acc,acc_std,skill_gap,score_count",
+                        "1,0.9,0.01,0.03,100",
+                        "2,0.8,0.02,0.04,50",
+                        "3,0.7,0.03,0.05,10",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            dataset = ManiaDifficultyDataset(
+                labels,
+                sequences,
+                sample_weight_column="score_count",
+                sample_weight_min=0.25,
+                sample_weight_max_value=100,
+            )
+
+            summary = sample_weight_summary(dataset, [0, 1, 2], prefix="train")
+
+        self.assertEqual(summary["sample_weight_train_count"], 3)
+        self.assertEqual(summary["sample_weight_train_downweighted_count"], 2)
+        self.assertAlmostEqual(summary["sample_weight_train_mean"], (1.0 + 0.5 + 0.25) / 3)
+        self.assertAlmostEqual(summary["sample_weight_train_min"], 0.25)
+        self.assertAlmostEqual(summary["sample_weight_train_downweighted_rate"], 2 / 3)
 
 
 if __name__ == "__main__":

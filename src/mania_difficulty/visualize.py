@@ -322,6 +322,20 @@ def metric_float(value: object) -> float | None:
     return parsed
 
 
+def format_metric_value(value: object, *, digits: int = 6) -> str:
+    parsed = metric_float(value)
+    if parsed is None:
+        return ""
+    return f"{parsed:.{digits}f}"
+
+
+def format_percent_value(value: object) -> str:
+    parsed = metric_float(value)
+    if parsed is None:
+        return ""
+    return f"{parsed:.2%}"
+
+
 def metric_targets(metrics: dict, target_columns: list[str] | None = None) -> list[str]:
     if target_columns:
         return [target for target in target_columns if isinstance(metrics.get(target), dict)]
@@ -703,6 +717,10 @@ def write_run_report(
                 f"<tr><th>Sample Weight Column</th><td>{html.escape(str(run_info.get('sample_weight_column', '')))}</td></tr>"
                 f"<tr><th>Sample Weight Min</th><td>{html.escape(str(run_info.get('sample_weight_min', '')))}</td></tr>"
                 f"<tr><th>Sample Weight Max Value</th><td>{html.escape(str(run_info.get('sample_weight_max_value', '')))}</td></tr>"
+                f"<tr><th>Sample Weight Train Mean</th><td>{html.escape(format_metric_value(run_info.get('sample_weight_train_mean')))}</td></tr>"
+                f"<tr><th>Sample Weight Train Min</th><td>{html.escape(format_metric_value(run_info.get('sample_weight_train_min')))}</td></tr>"
+                f"<tr><th>Sample Weight Train Downweighted Rate</th><td>{html.escape(format_percent_value(run_info.get('sample_weight_train_downweighted_rate')))}</td></tr>"
+                f"<tr><th>Sample Weight Train Downweighted Count</th><td>{html.escape(str(run_info.get('sample_weight_train_downweighted_count', '')))}</td></tr>"
                 f"<tr><th>Checkpoint Metric</th><td>{html.escape(str(checkpoint_metric))}</td></tr>"
                 f"<tr><th>Best Checkpoint Score</th><td>{html.escape(checkpoint_score_text(checkpoint_metric, best_checkpoint_score))}</td></tr>"
                 f"<tr><th>Checkpoint Best Epoch</th><td>{html.escape(str(run_info.get('best_epoch', '')))}</td></tr>"

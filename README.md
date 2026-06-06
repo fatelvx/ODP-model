@@ -108,7 +108,7 @@ Each run saves:
 - `predictions.csv`: actual model outputs on the test split
 - `prediction_summary.csv`: per-target actual mean, predicted mean, bias, MAE, median/p90/max error, over/under-prediction rate, and spread
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
-- `human_review.csv`: maps worth checking by hand
+- `human_review.csv`: maps worth checking by hand, including lowest observed/predicted mean accuracy and largest-error maps for each target
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently
 - `human_pair_judgment_template.csv`: fillable CSV for scoring model/proxy agreement with human judgment
 - `error_slices.csv`: mean-accuracy error grouped by metadata bins such as score count and note count

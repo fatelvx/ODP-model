@@ -786,9 +786,24 @@ def write_human_review(
             merged.sort_values("actual_mean_acc", ascending=True).head(top_n),
             "observed_lowest_mean_acc",
         )
+
+    for column in target_columns:
+        actual_column = f"actual_{column}"
+        pred_column = f"pred_{column}"
+        error_column = f"error_{column}"
+        if error_column not in merged.columns:
+            if actual_column not in merged.columns or pred_column not in merged.columns:
+                continue
+            merged[error_column] = merged[pred_column] - merged[actual_column]
+        errors = pd.to_numeric(merged[error_column], errors="coerce")
+        candidates = merged.assign(_abs_review_error=errors.abs()).dropna(
+            subset=["_abs_review_error"]
+        )
+        if candidates.empty:
+            continue
         add_candidates(
-            merged.reindex(merged["error_mean_acc"].abs().sort_values(ascending=False).index).head(top_n),
-            "largest_mean_acc_disagreement",
+            candidates.sort_values("_abs_review_error", ascending=False).head(top_n),
+            f"largest_{column}_disagreement",
         )
 
     review = pd.DataFrame(rows).drop_duplicates(["review_reason", "beatmap_id"])

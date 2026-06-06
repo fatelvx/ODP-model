@@ -120,6 +120,7 @@ Each run saves:
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
 - `metrics.json`: MAE and R2 per target
 - `best_model.pt`: checkpoint for prediction
+- `last_checkpoint.pt`: neural training state for `--resume`
 
 Metrics include a train-mean baseline when available:
 
@@ -394,7 +395,9 @@ data, keep API credentials in the notebook session only; do not commit them.
 The real-data path keeps LSTM as the normal Colab default, but if the neural
 sweep is changed to include `transformer`, the final run and dashboard use
 `colab_{model}_top100` automatically. If Colab reports CUDA out-of-memory,
-change `GRAD_ACCUM_STEPS` in the notebook from `1` to `2` or `4`.
+change `GRAD_ACCUM_STEPS` in the notebook from `1` to `2` or `4`. If a long
+final neural run is interrupted, re-run the final training cell with
+`RESUME_FINAL_TRAINING = True` to continue from `last_checkpoint.pt`.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.

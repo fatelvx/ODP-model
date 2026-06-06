@@ -45,6 +45,8 @@ class RunReportTests(unittest.TestCase):
                             "batch_size": 8,
                             "grad_accum_steps": 2,
                             "effective_batch_size": 16,
+                            "resume": True,
+                            "resumed_from_epoch": 2,
                         },
                     }
                 ),
@@ -71,6 +73,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Generalization Gap", report)
         self.assertIn("Overfit Signal", report)
         self.assertIn("Possible", report)
+        self.assertIn("Resume", report)
+        self.assertIn("Resumed From Epoch", report)
 
 
 if __name__ == "__main__":

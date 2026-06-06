@@ -7,6 +7,7 @@ import torch
 from mania_difficulty.train import (
     dataloader_options,
     gradient_accumulation_steps,
+    latest_checkpoint_path,
     mixed_precision_enabled,
     positive_int,
 )
@@ -68,6 +69,12 @@ class LoaderOptionTests(unittest.TestCase):
 
         with self.assertRaises(argparse.ArgumentTypeError):
             positive_int("-1")
+
+    def test_latest_checkpoint_path_is_stable_inside_run_dir(self):
+        self.assertEqual(
+            str(latest_checkpoint_path("outputs/runs/demo")).replace("\\", "/"),
+            "outputs/runs/demo/last_checkpoint.pt",
+        )
 
 
 if __name__ == "__main__":

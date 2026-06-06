@@ -17,6 +17,7 @@ class BuildDashboardTests(unittest.TestCase):
             audit_dir.mkdir(parents=True)
             sweep_dir.mkdir(parents=True)
             (run_dir / "run_report.html").write_text("<html>run</html>", encoding="utf-8")
+            (run_dir / "last_checkpoint.pt").write_bytes(b"checkpoint")
             (run_dir / "learning_curve.png").write_bytes(b"png")
             (run_dir / "prediction_scatter.png").write_bytes(b"png")
             (run_dir / "embedding_projection.png").write_bytes(b"png")
@@ -84,6 +85,7 @@ class BuildDashboardTests(unittest.TestCase):
 
         self.assertIn("run_a", html)
         self.assertIn("run_report.html", html)
+        self.assertIn("last_checkpoint.pt", html)
         self.assertIn("learning_curve.png", html)
         self.assertIn("embedding_report.html", html)
         self.assertIn("embedding_projection.png", html)

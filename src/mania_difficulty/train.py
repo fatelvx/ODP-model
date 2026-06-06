@@ -174,6 +174,10 @@ def gradient_accumulation_steps(args: argparse.Namespace) -> int:
     return max(1, int(getattr(args, "grad_accum_steps", 1)))
 
 
+def latest_checkpoint_path(run_dir: Path | str) -> Path:
+    return Path(run_dir) / "last_checkpoint.pt"
+
+
 def model_config_from_args(args: argparse.Namespace) -> dict[str, object]:
     if args.model == "lstm":
         return {
@@ -830,14 +834,37 @@ def train(args: argparse.Namespace) -> Path:
         loss_weights = torch.ones(len(target_columns), dtype=torch.float32, device=device)
 
     history_csv = run_dir / "history.csv"
-    write_history_header(history_csv)
-
     best_val_loss = float("inf")
     best_epoch = 0
     patience_left = args.patience
     checkpoint_path = run_dir / "best_model.pt"
+    last_checkpoint_path = latest_checkpoint_path(run_dir)
+    resume_requested = bool(getattr(args, "resume", False))
+    resumed_from_epoch = 0
+    start_epoch = 1
 
-    for epoch in range(1, args.epochs + 1):
+    if resume_requested and last_checkpoint_path.exists():
+        resume_checkpoint = torch.load(last_checkpoint_path, map_location=device)
+        model.load_state_dict(resume_checkpoint["model_state_dict"])
+        optimizer.load_state_dict(resume_checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(resume_checkpoint["scheduler_state_dict"])
+        scaler_state = resume_checkpoint.get("scaler_state_dict")
+        if scaler_state:
+            scaler.load_state_dict(scaler_state)
+        best_val_loss = float(resume_checkpoint.get("best_val_loss", best_val_loss))
+        best_epoch = int(resume_checkpoint.get("best_epoch", best_epoch))
+        patience_left = int(resume_checkpoint.get("patience_left", patience_left))
+        resumed_from_epoch = int(resume_checkpoint.get("epoch", 0))
+        start_epoch = resumed_from_epoch + 1
+        if not history_csv.exists():
+            write_history_header(history_csv)
+        print(f"Resuming from epoch {resumed_from_epoch}; next epoch is {start_epoch}.")
+    else:
+        write_history_header(history_csv)
+        if resume_requested:
+            print(f"--resume was set but {last_checkpoint_path} was not found; starting fresh.")
+
+    for epoch in range(start_epoch, args.epochs + 1):
         model.train()
         train_losses = []
         optimizer.zero_grad(set_to_none=True)
@@ -897,9 +924,28 @@ def train(args: argparse.Namespace) -> Path:
             )
         else:
             patience_left -= 1
-            if patience_left <= 0:
-                print(f"Early stopping at epoch {epoch}; best epoch was {best_epoch}.")
-                break
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "scaler_state_dict": scaler.state_dict(),
+                "model_name": args.model,
+                "model_config": model.config,
+                "target_columns": target_columns,
+                "target_mean": target_mean_np.tolist(),
+                "target_std": target_std_np.tolist(),
+                "max_notes": args.max_notes,
+                "best_epoch": best_epoch,
+                "best_val_loss": best_val_loss,
+                "patience_left": patience_left,
+            },
+            last_checkpoint_path,
+        )
+        if patience_left <= 0:
+            print(f"Early stopping at epoch {epoch}; best epoch was {best_epoch}.")
+            break
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -939,6 +985,9 @@ def train(args: argparse.Namespace) -> Path:
         "batch_size": args.batch_size,
         "grad_accum_steps": grad_accum_steps,
         "effective_batch_size": effective_batch_size,
+        "resume": resume_requested,
+        "resumed_from_epoch": resumed_from_epoch,
+        "last_checkpoint": last_checkpoint_path.name if last_checkpoint_path.exists() else "",
         "train_size": len(train_indices),
         "val_size": len(val_indices),
         "test_size": len(test_indices),
@@ -968,6 +1017,11 @@ def parse_args() -> argparse.Namespace:
         type=positive_int,
         default=1,
         help="Accumulate gradients across N micro-batches before stepping. Effective batch size is batch-size * N.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="For neural models, resume from last_checkpoint.pt in the run directory when it exists.",
     )
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)

@@ -167,6 +167,7 @@ def human_judgment_table(run_dir: Path) -> str:
 def run_card(run_dir: Path, out_html: Path) -> str:
     links = [
         link(run_dir / "run_report.html", "run report", out_html),
+        link(run_dir / "last_checkpoint.pt", "last checkpoint", out_html),
         link(run_dir / "predictions.csv", "predictions", out_html),
         link(run_dir / "human_review.csv", "human review", out_html),
         link(run_dir / "human_pair_review.csv", "pairwise review", out_html),

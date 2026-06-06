@@ -113,6 +113,7 @@ Each run saves:
 - `human_pair_judgment_template.csv`: fillable CSV for scoring model/proxy agreement with human judgment
 - `error_slices.csv`: mean-accuracy error grouped by metadata bins such as score count and note count
 - `prediction_scatter.png`: predicted vs actual plots
+- `prediction_errors.png`: residual plots and error histograms for spotting bias, collapse-to-mean, and outliers
 - `embedding_projection.csv`, `embedding_projection.png`, `embedding_report.html`: 2D model embedding projection when `project_embeddings` is run
 - `attention_map.csv`, `attention_map.png`, `attention_report.html`: Transformer note-level attention for one selected map when `attention_map` is run
 - `cv_metrics.json`: K-fold out-of-fold metrics when `--cv-folds` is enabled
@@ -120,6 +121,7 @@ Each run saves:
 - `cv_human_pair_judgment_template.csv`: fillable out-of-fold human judgment CSV
 - `cv_error_slices.csv`: cross-validation error slices when `--cv-folds` is enabled
 - `cv_prediction_scatter.png`: cross-validation predicted vs actual plots
+- `cv_prediction_errors.png`: cross-validation residual plots and error histograms
 - `cv_prediction_summary.csv`: out-of-fold per-target bias and error scale
 - `cv_prediction_rankings.csv`: cross-validation predicted hardest, easiest, and largest-error maps
 - `metrics.json`: MAE and R2 per target

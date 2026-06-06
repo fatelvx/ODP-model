@@ -94,6 +94,56 @@ def plot_prediction_scatter(
     plt.close(fig)
 
 
+def plot_prediction_errors(
+    predictions_csv: Path,
+    target_columns: list[str],
+    out_path: Path,
+) -> None:
+    predictions = pd.read_csv(predictions_csv)
+    fig, axes = plt.subplots(
+        len(target_columns),
+        2,
+        figsize=(10, 3.8 * len(target_columns)),
+        squeeze=False,
+    )
+
+    for row_index, column in enumerate(target_columns):
+        actual_column = f"actual_{column}"
+        pred_column = f"pred_{column}"
+        if actual_column not in predictions.columns or pred_column not in predictions.columns:
+            continue
+        frame = predictions[[actual_column, pred_column]].apply(
+            pd.to_numeric,
+            errors="coerce",
+        ).dropna()
+        if frame.empty:
+            continue
+        actual = frame[actual_column]
+        error = frame[pred_column] - frame[actual_column]
+
+        scatter_ax = axes[row_index][0]
+        scatter_ax.scatter(actual, error, alpha=0.75, s=24)
+        scatter_ax.axhline(0, color="black", linewidth=1)
+        scatter_ax.set_xlabel(f"Observed top100 proxy {column}")
+        scatter_ax.set_ylabel("Prediction error")
+        scatter_ax.set_title(f"{column} error vs observed")
+        scatter_ax.grid(True, alpha=0.25)
+
+        hist_ax = axes[row_index][1]
+        bins = min(20, max(5, int(len(error) ** 0.5) + 2))
+        hist_ax.hist(error, bins=bins, alpha=0.8, color="#2563eb")
+        hist_ax.axvline(0, color="black", linewidth=1)
+        hist_ax.axvline(error.mean(), color="#c2410c", linestyle="--", linewidth=1.5)
+        hist_ax.set_xlabel("Prediction error")
+        hist_ax.set_ylabel("Map count")
+        hist_ax.set_title(f"{column} error distribution")
+        hist_ax.grid(True, axis="y", alpha=0.25)
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=160)
+    plt.close(fig)
+
+
 def plot_feature_importance(importances_csv: Path, out_path: Path, *, top_n: int = 20) -> None:
     importances = pd.read_csv(importances_csv).head(top_n)
     fig_height = max(4, 0.32 * len(importances) + 1.2)
@@ -694,6 +744,7 @@ def write_run_report(
     metrics_path: Path | None = None,
     learning_curve_name: str = "learning_curve.png",
     prediction_scatter_name: str = "prediction_scatter.png",
+    prediction_errors_name: str = "prediction_errors.png",
     feature_importance_name: str = "feature_importance.png",
 ) -> None:
     metrics_html = "<p>No metrics yet.</p>"
@@ -768,6 +819,9 @@ def write_run_report(
         cv_scatter = run_dir / "cv_prediction_scatter.png"
         if cv_scatter.exists():
             cv_html += '<p><img src="cv_prediction_scatter.png" alt="Cross-validation prediction scatter"></p>'
+        cv_errors = run_dir / "cv_prediction_errors.png"
+        if cv_errors.exists():
+            cv_html += '<p><img src="cv_prediction_errors.png" alt="Cross-validation prediction errors"></p>'
 
     learning_curve_html = (
         f'<p><img src="{html.escape(learning_curve_name)}" alt="Learning curve"></p>'
@@ -778,6 +832,11 @@ def write_run_report(
         f'<p><img src="{html.escape(prediction_scatter_name)}" alt="Prediction scatter"></p>'
         if prediction_scatter_name and (run_dir / prediction_scatter_name).exists()
         else "<p>No prediction scatter image in this report.</p>"
+    )
+    prediction_errors_html = (
+        f'<p><img src="{html.escape(prediction_errors_name)}" alt="Prediction error distribution"></p>'
+        if prediction_errors_name and (run_dir / prediction_errors_name).exists()
+        else "<p>No prediction error image in this report.</p>"
     )
     feature_importance_html = (
         f'<p><img src="{html.escape(feature_importance_name)}" alt="Feature importance"></p>'
@@ -850,6 +909,8 @@ def write_run_report(
   {learning_curve_html}
   <h2>Predicted vs Observed Proxy</h2>
   {scatter_html}
+  <h2>Prediction Error Distribution</h2>
+  {prediction_errors_html}
   {f"<h2>Feature Importance</h2>{feature_importance_html}" if feature_importance_html else ""}
   {embedding_html}
   {attention_html}

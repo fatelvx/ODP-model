@@ -602,7 +602,14 @@ def run_card(run_dir: Path, out_html: Path) -> str:
         [
             image(run_dir / "learning_curve.png", f"{run_dir.name} learning curve", out_html),
             image(run_dir / "prediction_scatter.png", f"{run_dir.name} prediction scatter", out_html),
+            image(run_dir / "prediction_errors.png", f"{run_dir.name} prediction errors", out_html),
             image(run_dir / "cv_prediction_scatter.png", f"{run_dir.name} CV prediction scatter", out_html),
+            image(run_dir / "cv_prediction_errors.png", f"{run_dir.name} CV prediction errors", out_html),
+            image(
+                run_dir / "eval_prediction_errors.png",
+                f"{run_dir.name} evaluation prediction errors",
+                out_html,
+            ),
             image(run_dir / "embedding_projection.png", f"{run_dir.name} embedding projection", out_html),
             image(run_dir / "attention_map.png", f"{run_dir.name} transformer attention map", out_html),
             image(run_dir / "feature_importance.png", f"{run_dir.name} feature importance", out_html),

@@ -52,6 +52,7 @@ class RunReportTests(unittest.TestCase):
                     }
                 ]
             ).to_csv(run_dir / "prediction_summary.csv", index=False)
+            (run_dir / "prediction_errors.png").write_bytes(b"png")
             pd.DataFrame(
                 [
                     {
@@ -189,6 +190,8 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("predicted_hardest", report)
         self.assertIn("Prediction Summary", report)
         self.assertIn("bias", report)
+        self.assertIn("Prediction Error Distribution", report)
+        self.assertIn("prediction_errors.png", report)
         self.assertIn("Worst Error Slices", report)
         self.assertIn("score_count: high", report)
         self.assertIn("0.250000", report)

@@ -20,6 +20,8 @@ class ColabNotebookTests(unittest.TestCase):
         self.assertIn("calibration_columns", source)
         self.assertIn("prediction_summary.csv", source)
         self.assertIn("cv_prediction_summary.csv", source)
+        self.assertIn("prediction_errors.png", source)
+        self.assertIn("cv_prediction_errors.png", source)
         self.assertIn("calibration_warning", source)
         self.assertIn("TRAIN_DEVICE", source)
         self.assertIn("LOADER_WORKERS", source)

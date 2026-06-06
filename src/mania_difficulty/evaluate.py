@@ -25,7 +25,11 @@ from mania_difficulty.train import (
     write_prediction_summary,
     write_predictions,
 )
-from mania_difficulty.visualize import plot_prediction_scatter, write_run_report
+from mania_difficulty.visualize import (
+    plot_prediction_errors,
+    plot_prediction_scatter,
+    write_run_report,
+)
 
 
 def main() -> None:
@@ -100,12 +104,14 @@ def main() -> None:
     metrics_path = out_dir / "eval_metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     plot_prediction_scatter(predictions_csv, target_columns, out_dir / "eval_prediction_scatter.png")
+    plot_prediction_errors(predictions_csv, target_columns, out_dir / "eval_prediction_errors.png")
     write_run_report(
         out_dir,
         target_columns=target_columns,
         metrics_path=metrics_path,
         learning_curve_name="",
         prediction_scatter_name="eval_prediction_scatter.png",
+        prediction_errors_name="eval_prediction_errors.png",
     )
     print(json.dumps(metrics, indent=2))
 

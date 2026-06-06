@@ -34,6 +34,7 @@ from mania_difficulty.models.tabular import feature_names_for_set, summarize_seq
 from mania_difficulty.visualize import (
     plot_feature_importance,
     plot_learning_curve,
+    plot_prediction_errors,
     plot_prediction_scatter,
     write_run_report,
 )
@@ -58,6 +59,9 @@ CHECKPOINT_BACKUP_FILENAMES = [
     "run_report.html",
     "learning_curve.png",
     "prediction_scatter.png",
+    "prediction_errors.png",
+    "cv_prediction_errors.png",
+    "eval_prediction_errors.png",
     "prediction_rankings.csv",
     "cv_prediction_rankings.csv",
     "eval_prediction_rankings.csv",
@@ -1060,6 +1064,7 @@ def write_tabular_cross_validation(
     (run_dir / "cv_metrics.json").write_text(json.dumps(cv_metrics, indent=2), encoding="utf-8")
     write_cv_fold_metrics(run_dir / "cv_fold_metrics.csv", fold_rows)
     plot_prediction_scatter(cv_predictions_csv, target_columns, run_dir / "cv_prediction_scatter.png")
+    plot_prediction_errors(cv_predictions_csv, target_columns, run_dir / "cv_prediction_errors.png")
 
 
 def train_tabular_forest(
@@ -1194,6 +1199,7 @@ def train_tabular_forest(
     plot_feature_importance(feature_importance_csv, run_dir / "feature_importance.png")
     plot_learning_curve(history_csv, run_dir / "learning_curve.png")
     plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
+    plot_prediction_errors(predictions_csv, target_columns, run_dir / "prediction_errors.png")
     write_tabular_cross_validation(args, dataset, target_columns, run_dir, groups)
     write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
 
@@ -1591,6 +1597,7 @@ def train(args: argparse.Namespace) -> Path:
 
     plot_learning_curve(history_csv, run_dir / "learning_curve.png")
     plot_prediction_scatter(predictions_csv, target_columns, run_dir / "prediction_scatter.png")
+    plot_prediction_errors(predictions_csv, target_columns, run_dir / "prediction_errors.png")
     write_run_report(run_dir, target_columns=target_columns, metrics_path=metrics_path)
 
     (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2, default=str), encoding="utf-8")

@@ -383,6 +383,11 @@ python -m mania_difficulty.tools.build_dashboard `
   --out-html outputs/dashboard.html
 ```
 
+Start with the dashboard's `Run Decision Summary` table when comparing runs.
+It condenses each run into baseline wins, ranking quality, weakest target, and
+the generated `Next Action`; then use the run cards below it for plots and
+human-review files.
+
 After filling `human_pair_judgment_template.csv` or
 `cv_human_pair_judgment_template.csv`, score whether the model or top100 proxy
 matched your human judgment. Rebuild the dashboard after filling the CSV to see

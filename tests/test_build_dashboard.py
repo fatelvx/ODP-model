@@ -157,6 +157,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Low Score Count Rate", html)
         self.assertIn("20.00%", html)
         self.assertIn("best_forest", html)
+        self.assertIn("Run Decision Summary", html)
+        self.assertIn("Fix acc_std before longer training", html)
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)
         self.assertIn("0.500000", html)

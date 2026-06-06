@@ -14,6 +14,7 @@ from mania_difficulty.tools.compare_runs import run_metrics_rows
 from mania_difficulty.visualize import (
     checkpoint_score_text,
     model_verdict_html,
+    model_verdict_summary,
     training_health_html,
     training_performance_html,
     worst_error_slices_html,
@@ -161,6 +162,65 @@ def metrics_table(run_dirs: list[Path]) -> str:
     ]
     keep_columns = [column for column in keep_columns if column in frame.columns]
     return frame[keep_columns].sort_values(["evaluation", "target", "mae", "run"]).to_html(
+        index=False,
+        float_format=lambda value: f"{value:.6f}",
+    )
+
+
+def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for metrics_name, default_evaluation in [
+        ("metrics.json", "holdout"),
+        ("cv_metrics.json", "cv_oof"),
+    ]:
+        metrics = load_json(run_dir / metrics_name)
+        if not metrics:
+            continue
+        summary = model_verdict_summary(metrics)
+        if not summary:
+            continue
+        run_info = metrics.get("_run", {})
+        if not isinstance(run_info, dict):
+            run_info = {}
+        baseline_target_count = int(summary.get("baseline_target_count", 0))
+        difficulty_target_count = int(summary.get("difficulty_baseline_target_count", 0))
+        rows.append(
+            {
+                "run": run_dir.name,
+                "model_name": run_info.get("model_name", ""),
+                "evaluation": run_info.get("evaluation", default_evaluation),
+                "targets": summary.get("target_count", ""),
+                "mean_mae": summary.get("mean_mae", ""),
+                "mean_pairwise_order_accuracy": summary.get(
+                    "mean_pairwise_order_accuracy",
+                    "",
+                ),
+                "targets_beating_baseline": (
+                    f"{summary.get('targets_beating_baseline', 0)} / {baseline_target_count}"
+                    if baseline_target_count
+                    else ""
+                ),
+                "targets_beating_difficulty_rating": (
+                    f"{summary.get('targets_beating_difficulty_rating_baseline', 0)}"
+                    f" / {difficulty_target_count}"
+                    if difficulty_target_count
+                    else ""
+                ),
+                "weakest_target": summary.get("weakest_target", ""),
+                "next_action": summary.get("next_action", ""),
+            }
+        )
+    return rows
+
+
+def run_decision_table(run_dirs: list[Path]) -> str:
+    rows: list[dict[str, object]] = []
+    for run_dir in run_dirs:
+        rows.extend(run_decision_rows(run_dir))
+    if not rows:
+        return "<p>No model verdicts found.</p>"
+    frame = pd.DataFrame(rows)
+    return frame.sort_values(["evaluation", "run"]).to_html(
         index=False,
         float_format=lambda value: f"{value:.6f}",
     )
@@ -317,6 +377,10 @@ def write_dashboard(
   {audit_section(audit_dir, out_html)}
   {best_params_section("Forest Sweep", forest_sweep_dir, "sweep_report.html", out_html)}
   {best_params_section("Neural Sweep", neural_sweep_dir, "neural_sweep_report.html", out_html)}
+  <section>
+    <h2>Run Decision Summary</h2>
+    {run_decision_table(run_dirs)}
+  </section>
   <section>
     <h2>Run Metrics</h2>
     {metrics_table(run_dirs)}

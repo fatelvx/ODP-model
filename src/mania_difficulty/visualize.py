@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 from pathlib import Path
 
 import matplotlib
@@ -204,6 +205,106 @@ def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
     )
 
 
+def metric_float(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def metric_targets(metrics: dict, target_columns: list[str] | None = None) -> list[str]:
+    if target_columns:
+        return [target for target in target_columns if isinstance(metrics.get(target), dict)]
+    return [
+        target
+        for target, values in metrics.items()
+        if not target.startswith("_") and isinstance(values, dict)
+    ]
+
+
+def model_verdict_summary(metrics: dict, target_columns: list[str] | None = None) -> dict[str, object]:
+    targets = metric_targets(metrics, target_columns)
+    if not targets:
+        return {}
+
+    mae_values: list[tuple[str, float]] = []
+    pairwise_values: list[float] = []
+    spearman_values: list[float] = []
+    improvement_values: list[float] = []
+    baseline_targets = 0
+    beating_baseline = 0
+    for target in targets:
+        values = metrics.get(target, {})
+        mae = metric_float(values.get("mae"))
+        if mae is not None:
+            mae_values.append((target, mae))
+        pairwise = metric_float(values.get("pairwise_order_accuracy"))
+        if pairwise is not None:
+            pairwise_values.append(pairwise)
+        spearman = metric_float(values.get("spearman"))
+        if spearman is not None:
+            spearman_values.append(spearman)
+        improvement = metric_float(values.get("mae_improvement_pct"))
+        if improvement is not None:
+            baseline_targets += 1
+            improvement_values.append(improvement)
+            if improvement > 0:
+                beating_baseline += 1
+
+    weakest_target = max(mae_values, key=lambda item: item[1])[0] if mae_values else ""
+    summary: dict[str, object] = {
+        "target_count": len(targets),
+        "baseline_target_count": baseline_targets,
+        "targets_beating_baseline": beating_baseline,
+        "weakest_target": weakest_target,
+    }
+    if mae_values:
+        summary["mean_mae"] = sum(value for _, value in mae_values) / len(mae_values)
+    if pairwise_values:
+        summary["mean_pairwise_order_accuracy"] = sum(pairwise_values) / len(pairwise_values)
+    if spearman_values:
+        summary["mean_spearman"] = sum(spearman_values) / len(spearman_values)
+    if improvement_values:
+        summary["mean_improvement_pct"] = sum(improvement_values) / len(improvement_values)
+    return summary
+
+
+def model_verdict_html(
+    metrics: dict,
+    target_columns: list[str] | None = None,
+    *,
+    heading_level: int = 2,
+) -> str:
+    summary = model_verdict_summary(metrics, target_columns)
+    if not summary:
+        return ""
+    heading_tag = f"h{heading_level}"
+    rows = [
+        ("Targets", summary["target_count"]),
+        (
+            "Targets Beating Baseline",
+            f"{summary['targets_beating_baseline']} / {summary['baseline_target_count']}",
+        ),
+    ]
+    if "mean_mae" in summary:
+        rows.append(("Mean MAE", f"{summary['mean_mae']:.6f}"))
+    if "mean_pairwise_order_accuracy" in summary:
+        rows.append(("Mean Pairwise Order", f"{summary['mean_pairwise_order_accuracy']:.2%}"))
+    if "mean_spearman" in summary:
+        rows.append(("Mean Spearman", f"{summary['mean_spearman']:.4f}"))
+    if "mean_improvement_pct" in summary:
+        rows.append(("Mean Baseline Improvement", f"{summary['mean_improvement_pct'] * 100:.2f}%"))
+    rows.append(("Weakest Target", summary["weakest_target"]))
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<{heading_tag}>Model Verdict</{heading_tag}><table><tbody>{row_html}</tbody></table>"
+
+
 def csv_preview_html(path: Path, title: str, description: str, *, max_rows: int = 20) -> str:
     if not path.exists():
         return ""
@@ -298,10 +399,12 @@ def write_run_report(
     feature_importance_name: str = "feature_importance.png",
 ) -> None:
     metrics_html = "<p>No metrics yet.</p>"
+    verdict_html = ""
     run_info_html = ""
     if metrics_path and metrics_path.exists():
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
         metrics_html = metrics_table_html(metrics, target_columns)
+        verdict_html = model_verdict_html(metrics, target_columns)
         run_info = metrics.get("_run", {})
         if run_info:
             model_config = run_info.get("model_config", "")
@@ -412,6 +515,7 @@ def write_run_report(
   <p>Run directory: <code>{html.escape(str(run_dir))}</code></p>
   {run_info_html}
   <h2>Metrics</h2>
+  {verdict_html}
   {metrics_html}
   {cv_html}
   {health_html}

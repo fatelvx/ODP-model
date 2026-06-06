@@ -57,6 +57,14 @@ class BuildDashboardTests(unittest.TestCase):
                 json.dumps(
                     {
                         "mean_acc": {"mae": 0.1, "spearman": 0.5, "pairwise_order_accuracy": 0.75},
+                        "acc_std": {
+                            "mae": 0.2,
+                            "spearman": 0.4,
+                            "pairwise_order_accuracy": 0.6,
+                            "baseline_mae": 0.1,
+                            "mae_improvement_vs_baseline": -0.1,
+                            "mae_improvement_pct": -1.0,
+                        },
                         "_run": {"model_name": "summary", "evaluation": "holdout", "seed": 42},
                     }
                 ),
@@ -102,6 +110,9 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Overfit Signal", html)
         self.assertIn("Training Performance", html)
         self.assertIn("Peak CUDA Memory MB", html)
+        self.assertIn("Model Verdict", html)
+        self.assertIn("Targets Beating Baseline", html)
+        self.assertIn("Weakest Target", html)
 
 
 if __name__ == "__main__":

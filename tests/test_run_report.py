@@ -58,7 +58,15 @@ class RunReportTests(unittest.TestCase):
             metrics_path.write_text(
                 json.dumps(
                     {
-                        "mean_acc": {"mae": 0.1, "r2": 0.2, "spearman": 0.3, "pairwise_order_accuracy": 0.4},
+                        "mean_acc": {
+                            "mae": 0.1,
+                            "r2": 0.2,
+                            "spearman": 0.3,
+                            "pairwise_order_accuracy": 0.4,
+                            "baseline_mae": 0.2,
+                            "mae_improvement_vs_baseline": 0.1,
+                            "mae_improvement_pct": 0.5,
+                        },
                         "_run": {
                             "model_name": "summary",
                             "amp": "auto",
@@ -103,6 +111,10 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Training Performance", report)
         self.assertIn("Average Epoch Seconds", report)
         self.assertIn("Peak CUDA Memory MB", report)
+        self.assertIn("Model Verdict", report)
+        self.assertIn("Targets Beating Baseline", report)
+        self.assertIn("Mean Pairwise Order", report)
+        self.assertIn("Weakest Target", report)
 
 
 if __name__ == "__main__":

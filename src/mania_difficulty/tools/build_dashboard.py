@@ -11,7 +11,11 @@ import pandas as pd
 
 from mania_difficulty.human_judgments import score_pair_judgments
 from mania_difficulty.tools.compare_runs import run_metrics_rows
-from mania_difficulty.visualize import training_health_html, training_performance_html
+from mania_difficulty.visualize import (
+    model_verdict_html,
+    training_health_html,
+    training_performance_html,
+)
 
 
 def href(path: Path, out_html: Path) -> str:
@@ -164,6 +168,13 @@ def human_judgment_table(run_dir: Path) -> str:
     )
 
 
+def run_verdict_html(run_dir: Path) -> str:
+    metrics = load_json(run_dir / "metrics.json")
+    if not metrics:
+        return ""
+    return model_verdict_html(metrics, heading_level=4)
+
+
 def run_card(run_dir: Path, out_html: Path) -> str:
     links = [
         link(run_dir / "run_report.html", "run report", out_html),
@@ -195,6 +206,7 @@ def run_card(run_dir: Path, out_html: Path) -> str:
     return (
         f'<section class="run-card"><h3>{html.escape(run_dir.name)}</h3>'
         f"<p>{links_html}</p>"
+        f"{run_verdict_html(run_dir)}"
         f"{human_judgment_table(run_dir)}"
         f"{training_health_html(run_dir / 'history.csv', heading_level=4)}"
         f"{training_performance_html(run_dir / 'history.csv', heading_level=4)}"

@@ -104,7 +104,7 @@ Each run saves:
 
 - `history.csv`: train/val loss, epoch seconds, LR, and CUDA peak memory per epoch
 - `learning_curve.png`: growth curve
-- `run_report.html`: includes Training Health and Training Performance tables for loss trend, speed, LR, and memory checks
+- `run_report.html`: includes Model Verdict, Training Health, and Training Performance tables for quick quality, loss, speed, LR, and memory checks
 - `predictions.csv`: actual model outputs on the test split
 - `human_review.csv`: maps worth checking by hand
 - `human_pair_review.csv`: map pairs where model and top100 proxy rank difficulty differently

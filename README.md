@@ -286,6 +286,20 @@ python -m mania_difficulty.tools.compare_runs `
   outputs/runs/lstm_top100_baseline
 ```
 
+Build one dashboard that links the audit, sweeps, comparison, metrics, plots,
+and human-review files:
+
+```powershell
+python -m mania_difficulty.tools.build_dashboard `
+  outputs/runs/forest_top100_baseline `
+  outputs/runs/lstm_top100_baseline `
+  --audit-dir outputs/dataset_audit_top100 `
+  --forest-sweep-dir outputs/forest_sweep_top100 `
+  --neural-sweep-dir outputs/neural_sweep_top100 `
+  --comparison-html outputs/run_comparison.html `
+  --out-html outputs/dashboard.html
+```
+
 Predict one `.osu` file after training:
 
 ```powershell

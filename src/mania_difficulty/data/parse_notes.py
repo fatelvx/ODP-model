@@ -10,6 +10,13 @@ from tqdm import tqdm
 
 MANIA_PLAYFIELD_WIDTH = 512
 HOLD_NOTE_TYPE_BIT = 128
+OSU_METADATA_FIELDS = {
+    "mode": ("General", "Mode"),
+    "circle_size": ("Difficulty", "CircleSize"),
+    "hp_drain_rate": ("Difficulty", "HPDrainRate"),
+    "overall_difficulty": ("Difficulty", "OverallDifficulty"),
+    "approach_rate": ("Difficulty", "ApproachRate"),
+}
 
 
 @dataclass(frozen=True)
@@ -34,6 +41,35 @@ def hitobject_lines(osu_text: str) -> list[str]:
         if in_hitobjects:
             lines.append(line)
     return lines
+
+
+def parse_osu_metadata(osu_text: str) -> dict[str, float]:
+    section = ""
+    raw_values: dict[tuple[str, str], str] = {}
+    for raw_line in osu_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("//"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        raw_values[(section, key.strip())] = value.strip()
+
+    metadata: dict[str, float] = {}
+    for output_name, source in OSU_METADATA_FIELDS.items():
+        raw_value = raw_values.get(source)
+        if raw_value in (None, ""):
+            continue
+        try:
+            metadata[output_name] = float(raw_value)
+        except ValueError:
+            continue
+    if "circle_size" in metadata:
+        metadata["keys"] = metadata["circle_size"]
+    return metadata
 
 
 def x_to_column(x: int, keys: int = 4) -> int:
@@ -120,6 +156,11 @@ def events_to_features(events: list[NoteEvent], keys: int = 4) -> list[list[floa
 def parse_osu_file(path: Path, keys: int = 4) -> list[list[float]]:
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     return events_to_features(parse_osu_text(text, keys), keys)
+
+
+def read_osu_metadata(path: Path) -> dict[str, float]:
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    return parse_osu_metadata(text)
 
 
 def save_sequence(features: list[list[float]], out_path: Path) -> None:

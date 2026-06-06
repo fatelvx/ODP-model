@@ -1,10 +1,19 @@
 import unittest
 
-from mania_difficulty.data.parse_notes import events_to_features, parse_osu_text
+from mania_difficulty.data.parse_notes import events_to_features, parse_osu_metadata, parse_osu_text
 
 
 SAMPLE_OSU = """
 osu file format v14
+
+[General]
+Mode: 3
+
+[Difficulty]
+HPDrainRate:6.5
+CircleSize:4
+OverallDifficulty:8
+ApproachRate:5
 
 [HitObjects]
 64,192,1000,1,0,0:0:0:0:
@@ -32,6 +41,16 @@ class ParseNotesTests(unittest.TestCase):
         self.assertEqual(features[2][1], 0.5)
         self.assertEqual(features[2][4], 0.6)
         self.assertEqual(features[0][5], 0.5)
+
+    def test_parse_osu_metadata_extracts_mania_keys_and_difficulty_settings(self):
+        metadata = parse_osu_metadata(SAMPLE_OSU)
+
+        self.assertEqual(metadata["mode"], 3.0)
+        self.assertEqual(metadata["keys"], 4.0)
+        self.assertEqual(metadata["circle_size"], 4.0)
+        self.assertEqual(metadata["hp_drain_rate"], 6.5)
+        self.assertEqual(metadata["overall_difficulty"], 8.0)
+        self.assertEqual(metadata["approach_rate"], 5.0)
 
 
 if __name__ == "__main__":

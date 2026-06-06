@@ -38,6 +38,12 @@ def flatten_search_page(page: dict[str, Any]) -> list[dict[str, Any]]:
                     "length_ms": int(float(beatmap.get("total_length", 0))) * 1000,
                     "bpm": beatmap.get("bpm") or beatmapset.get("bpm") or "",
                     "difficulty_rating": beatmap.get("difficulty_rating", ""),
+                    "mode": 3,
+                    "circle_size": beatmap.get("cs", ""),
+                    "keys": beatmap.get("cs", ""),
+                    "hp_drain_rate": beatmap.get("drain", ""),
+                    "overall_difficulty": beatmap.get("accuracy", ""),
+                    "approach_rate": beatmap.get("ar", ""),
                 }
             )
     return rows
@@ -90,6 +96,12 @@ def write_csv(rows: list[dict[str, Any]], out: Path) -> None:
         "length_ms",
         "bpm",
         "difficulty_rating",
+        "mode",
+        "circle_size",
+        "keys",
+        "hp_drain_rate",
+        "overall_difficulty",
+        "approach_rate",
     ]
     with out.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)

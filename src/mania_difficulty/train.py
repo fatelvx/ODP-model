@@ -934,7 +934,13 @@ def tabular_arrays(
     for index in indices:
         sample = dataset[index]
         sequence = np.asarray(sample["features"], dtype="float32")[:max_notes]
-        features.append(summarize_sequence(sequence, feature_set=feature_set))
+        features.append(
+            summarize_sequence(
+                sequence,
+                feature_set=feature_set,
+                metadata=dataset.labels.iloc[index].to_dict(),
+            )
+        )
         targets.append(np.asarray(sample["targets"], dtype="float32"))
         beatmap_ids.append(int(sample["beatmap_id"]))
     return (
@@ -1789,9 +1795,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--forest-max-features", type=parse_max_features, default="sqrt")
     parser.add_argument(
         "--feature-set",
-        choices=["core", "burst"],
+        choices=["core", "burst", "core_metadata", "burst_metadata"],
         default="core",
-        help="Tabular feature set. core preserves the stable baseline; burst adds density/jack/chord-burst features.",
+        help=(
+            "Tabular feature set. core preserves the stable baseline; burst adds density/jack/chord-burst "
+            "features; *_metadata appends keys/HP/OD/AR/difficulty/length/BPM from labels."
+        ),
     )
     parser.add_argument(
         "--cv-folds",

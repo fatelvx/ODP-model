@@ -3,8 +3,10 @@ import unittest
 import numpy as np
 
 from mania_difficulty.models.tabular import (
+    METADATA_FEATURE_NAMES,
     SUMMARY_FEATURE_NAMES,
     feature_names_for_set,
+    metadata_features_from_row,
     summarize_sequence,
 )
 
@@ -67,6 +69,42 @@ class TabularFeatureTests(unittest.TestCase):
         self.assertGreater(summary[names.index("peak_notes_per_sec_1s")], 10)
         self.assertGreater(summary[names.index("jack_ratio_100ms")], 0.4)
         self.assertGreater(summary[names.index("burst_chord_2_ratio")], 0.3)
+
+    def test_core_metadata_feature_set_appends_map_settings(self):
+        features = np.asarray(
+            [
+                [0.00, 0.00, 0.00, 0.0, 0.0, 0.25],
+                [1.00, 0.50, 1.00, 0.0, 0.0, 0.50],
+            ],
+            dtype=np.float32,
+        )
+
+        names = feature_names_for_set("core_metadata")
+        summary = summarize_sequence(
+            features,
+            feature_set="core_metadata",
+            metadata={
+                "keys": "4",
+                "hp_drain_rate": "6.5",
+                "overall_difficulty": "8",
+                "approach_rate": "5",
+                "difficulty_rating": "6.2",
+                "length_ms": "120000",
+                "bpm": "180",
+            },
+        )
+
+        self.assertEqual(summary.shape, (len(SUMMARY_FEATURE_NAMES) + len(METADATA_FEATURE_NAMES),))
+        self.assertEqual(summary[names.index("metadata_keys")], 4.0)
+        self.assertEqual(summary[names.index("metadata_hp_drain_rate")], 6.5)
+        self.assertEqual(summary[names.index("metadata_overall_difficulty")], 8.0)
+        self.assertEqual(summary[names.index("metadata_length_sec")], 120.0)
+
+    def test_metadata_features_from_row_defaults_missing_values_to_zero(self):
+        values = metadata_features_from_row({})
+
+        self.assertEqual(values.shape, (len(METADATA_FEATURE_NAMES),))
+        self.assertTrue(np.all(values == 0.0))
 
 
 if __name__ == "__main__":

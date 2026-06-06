@@ -48,7 +48,7 @@ def parse_max_features_list(value: str) -> list[str | float]:
 
 def parse_feature_sets(value: str) -> list[str]:
     items = [item.strip() for item in value.split(",") if item.strip()]
-    allowed = {"core", "burst"}
+    allowed = {"core", "burst", "core_metadata", "burst_metadata"}
     invalid = [item for item in items if item not in allowed]
     if invalid:
         raise argparse.ArgumentTypeError(f"Unknown feature sets: {invalid}")

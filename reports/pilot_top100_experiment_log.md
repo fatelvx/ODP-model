@@ -623,6 +623,97 @@ Notes:
 - Future sequence work should change training signal/model capacity/data
   coverage rather than only selecting checkpoints by validation pairwise order.
 
+### LSTM CPU m3000 Small 8-Epoch Capacity Check
+
+This run increases the local CPU LSTM from `embed=8, hidden=16` to
+`embed=16, hidden=32` while keeping `max_notes=3000`. It tests whether a modest
+capacity increase fixes the near-constant prediction spread without needing
+Colab GPU yet.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_lstm_cpu_real_m3000_small_e8 `
+  --model lstm `
+  --epochs 8 `
+  --batch-size 4 `
+  --grad-accum-steps 4 `
+  --lr 0.001 `
+  --weight-decay 0.0001 `
+  --patience 4 `
+  --checkpoint-metric val_mean_mae `
+  --group-column beatmapset_id `
+  --max-notes 3000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --huber-delta 0.5 `
+  --device cpu `
+  --amp off `
+  --loader-workers 0 `
+  --lstm-embed-dim 16 `
+  --lstm-hidden-dim 32 `
+  --lstm-layers 1 `
+  --lstm-dropout 0.0 `
+  --lstm-head-dropout 0.2 `
+  --seed 42
+```
+
+Validation curve:
+
+| Metric | Start | Final | Best |
+| --- | ---: | ---: | ---: |
+| Validation mean MAE | 0.02357 | 0.01554 | 0.01553 |
+| Validation pairwise order | 33.84% | 45.96% | 46.46% |
+
+Runtime:
+
+| Metric | Value |
+| --- | ---: |
+| Average epoch seconds | 61.38 |
+| Total epoch seconds | 491.04 |
+| Epochs completed | 8 / 8 |
+| Best checkpoint epoch | 7 |
+
+Holdout test metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline | MAE improvement vs difficulty rating |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.015543 | -0.0135 | 0.0110 | 51.28% | 29.60% | 31.70% |
+| acc_std | 0.017621 | -0.0398 | -0.3297 | 38.46% | 38.77% | 40.84% |
+| skill_gap | 0.028275 | -0.0364 | -0.1868 | 42.31% | 25.95% | 27.47% |
+
+Capacity comparison:
+
+| Run | Mean holdout MAE | Mean R2 | Mean Spearman | Mean Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LSTM m3000 tiny e3 | 0.024430 | -0.0754 | 0.0495 | 51.71% | 18.19% |
+| LSTM m3000 tiny e12 | 0.019792 | -0.0066 | -0.1502 | 44.87% | 33.69% |
+| LSTM m3000 tiny e12 rankckpt | 0.019989 | -0.0079 | -0.1209 | 45.73% | 33.13% |
+| LSTM m3000 small e8 | 0.020480 | -0.0299 | -0.1685 | 44.02% | 31.44% |
+
+Prediction spread check:
+
+| Target | Tiny e12 predicted std | Small e8 predicted std | Actual std | Small predicted / actual std | Tiny e12 MAE | Small e8 MAE |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.000080 | 0.000184 | 0.024237 | 0.0076 | 0.015153 | 0.015543 |
+| acc_std | 0.000104 | 0.000449 | 0.026729 | 0.0168 | 0.016939 | 0.017621 |
+| skill_gap | 0.000233 | 0.000605 | 0.041247 | 0.0147 | 0.027285 | 0.028275 |
+
+Notes:
+
+- A modest capacity increase widens prediction spread compared with tiny e12,
+  but the predictions are still effectively collapsed: only 0.76%-1.68% of
+  actual target standard deviation.
+- The larger local model is much slower on CPU and did not improve MAE or
+  ranking versus tiny e12. Validation pairwise topped out at only 46.46%.
+- Capacity alone is not enough at this pilot size. The next sequence iteration
+  should use GPU runtime for longer/fuller experiments and should consider
+  training-signal changes instead of only increasing hidden size locally.
+
 ### Tabular Forest Core
 
 Command:
@@ -1108,6 +1199,7 @@ Notes:
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e3\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m3000_tiny_e12_rankckpt\run_report.html`
+- `outputs\runs\pilot_top100_lstm_cpu_real_m3000_small_e8\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
@@ -1147,6 +1239,10 @@ ranking or spread.
 Switching the same tiny LSTM to a validation-pairwise checkpoint only improved
 holdout mean pairwise from 44.87% to 45.73% and slightly worsened MAE, so weak
 ranking is not mainly a checkpoint-selection issue.
+A modest CPU capacity increase (`embed=16`, `hidden=32`) widened prediction
+spread a little but still only reached 0.76%-1.68% of actual target spread, and
+it worsened mean holdout MAE/pairwise versus tiny e12. Local capacity scaling is
+not the right next lever by itself.
 
 Next training iteration:
 
@@ -1168,6 +1264,8 @@ Next training iteration:
    model or ranking-aware tuning because the tiny CPU run still collapses to
    near-constant predictions and weak holdout ranking. Do not rely on
    `val_mean_pairwise_order_accuracy` checkpoint selection alone; it did not
-   materially fix holdout ranking.
+   materially fix holdout ranking. Do not spend more local CPU time on modest
+   hidden-size increases only; the small e8 capacity check was slower and did
+   not improve holdout quality.
 6. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

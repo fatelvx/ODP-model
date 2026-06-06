@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 
 
@@ -48,6 +50,17 @@ BURST_FEATURE_NAMES = [
     "burst_chord_3_ratio",
 ]
 
+METADATA_FEATURE_NAMES = [
+    "metadata_mode",
+    "metadata_keys",
+    "metadata_hp_drain_rate",
+    "metadata_overall_difficulty",
+    "metadata_approach_rate",
+    "metadata_difficulty_rating",
+    "metadata_length_sec",
+    "metadata_bpm",
+]
+
 SUMMARY_FEATURE_NAMES = CORE_FEATURE_NAMES
 EXTENDED_FEATURE_NAMES = CORE_FEATURE_NAMES + BURST_FEATURE_NAMES
 
@@ -56,12 +69,62 @@ def _safe_ratio(numerator: float, denominator: float) -> float:
     return float(numerator / denominator) if denominator else 0.0
 
 
+def _metadata_value(row: Mapping[str, object] | None, *columns: str) -> float:
+    if row is None:
+        return 0.0
+    for column in columns:
+        raw_value = row.get(column)
+        if raw_value in (None, ""):
+            continue
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(value):
+            return value
+    return 0.0
+
+
+def metadata_features_from_row(row: Mapping[str, object] | None) -> np.ndarray:
+    length_sec = _metadata_value(row, "length_sec")
+    if length_sec == 0.0:
+        length_sec = _metadata_value(row, "length_ms") / 1000.0
+    return np.asarray(
+        [
+            _metadata_value(row, "mode", "mode_int"),
+            _metadata_value(row, "keys", "circle_size", "cs"),
+            _metadata_value(row, "hp_drain_rate", "hp", "drain"),
+            _metadata_value(row, "overall_difficulty", "od", "accuracy"),
+            _metadata_value(row, "approach_rate", "ar"),
+            _metadata_value(row, "difficulty_rating"),
+            length_sec,
+            _metadata_value(row, "bpm"),
+        ],
+        dtype=np.float32,
+    )
+
+
+def base_feature_set(feature_set: str) -> str:
+    if feature_set.endswith("_metadata"):
+        return feature_set.removesuffix("_metadata")
+    return feature_set
+
+
+def include_metadata_features(feature_set: str) -> bool:
+    return feature_set.endswith("_metadata")
+
+
 def feature_names_for_set(feature_set: str) -> list[str]:
-    if feature_set == "core":
-        return list(CORE_FEATURE_NAMES)
-    if feature_set == "burst":
-        return list(EXTENDED_FEATURE_NAMES)
-    raise ValueError(f"Unknown feature set: {feature_set}")
+    base_set = base_feature_set(feature_set)
+    if base_set == "core":
+        names = list(CORE_FEATURE_NAMES)
+    elif base_set == "burst":
+        names = list(EXTENDED_FEATURE_NAMES)
+    else:
+        raise ValueError(f"Unknown feature set: {feature_set}")
+    if include_metadata_features(feature_set):
+        names.extend(METADATA_FEATURE_NAMES)
+    return names
 
 
 def _window_density(times: np.ndarray, window_sec: float) -> tuple[float, float, np.ndarray]:
@@ -79,11 +142,23 @@ def _window_density(times: np.ndarray, window_sec: float) -> tuple[float, float,
     return float(np.max(densities)), float(np.mean(densities)), densities
 
 
-def summarize_sequence(features: np.ndarray, *, feature_set: str = "core") -> np.ndarray:
+def summarize_sequence(
+    features: np.ndarray,
+    *,
+    feature_set: str = "core",
+    metadata: Mapping[str, object] | None = None,
+) -> np.ndarray:
     feature_names = feature_names_for_set(feature_set)
+    base_set = base_feature_set(feature_set)
+    metadata_values = (
+        metadata_features_from_row(metadata)
+        if include_metadata_features(feature_set)
+        else np.empty(0, dtype=np.float32)
+    )
     array = np.asarray(features, dtype=np.float32)
     if array.ndim != 2 or array.shape[1] < 6 or len(array) == 0:
-        return np.zeros(len(feature_names), dtype=np.float32)
+        base_length = len(feature_names) - len(metadata_values)
+        return np.concatenate([np.zeros(base_length, dtype=np.float32), metadata_values])
 
     note_count = float(len(array))
     deltas = np.clip(array[:, 1], 0.0, None)
@@ -192,14 +267,26 @@ def summarize_sequence(features: np.ndarray, *, feature_set: str = "core") -> np
         burst_chord_3_ratio,
     ]
     values_array = np.asarray(values, dtype=np.float32)
-    if feature_set == "core":
-        return values_array[: len(CORE_FEATURE_NAMES)]
+    if base_set == "core":
+        values_array = values_array[: len(CORE_FEATURE_NAMES)]
+    if include_metadata_features(feature_set):
+        values_array = np.concatenate([values_array, metadata_values])
     return values_array
 
 
-def summarize_sequences(sequences: list[np.ndarray], *, feature_set: str = "core") -> np.ndarray:
+def summarize_sequences(
+    sequences: list[np.ndarray],
+    *,
+    feature_set: str = "core",
+    metadata_rows: list[Mapping[str, object] | None] | None = None,
+) -> np.ndarray:
     if not sequences:
         return np.empty((0, len(feature_names_for_set(feature_set))), dtype=np.float32)
+    if metadata_rows is None:
+        metadata_rows = [None] * len(sequences)
     return np.stack(
-        [summarize_sequence(sequence, feature_set=feature_set) for sequence in sequences]
+        [
+            summarize_sequence(sequence, feature_set=feature_set, metadata=metadata)
+            for sequence, metadata in zip(sequences, metadata_rows, strict=True)
+        ]
     ).astype(np.float32)

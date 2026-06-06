@@ -465,6 +465,61 @@ Notes:
 - Fold 5 remains weak and slightly negative-rank, so this is an incremental
   pilot improvement, not final evidence of model quality.
 
+### Tabular Forest Seed Stability Check
+
+Command shape:
+
+```powershell
+$seeds = 7,13,42,99,123
+foreach ($seed in $seeds) {
+  .\.venv\Scripts\python.exe -m mania_difficulty.train `
+    --labels data\processed\labels_pilot_top100.csv `
+    --sequences data\processed\sequences_pilot `
+    --run-name "pilot_top100_forest_core_pairwise_stability_seed${seed}_real" `
+    --model tabular_forest `
+    --feature-set core `
+    --forest-trees 200 `
+    --forest-min-samples-leaf 2 `
+    --forest-max-features sqrt `
+    --cv-folds 5 `
+    --group-column beatmapset_id `
+    --max-notes 7000 `
+    --workers -1 `
+    --seed $seed
+}
+```
+
+5-seed grouped out-of-fold stability:
+
+| Seed | Mean CV MAE | Mean CV R2 | Mean CV Spearman | Mean CV Pairwise | Mean Improvement | Targets beating baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.026470 | -0.0522 | 0.1911 | 56.05% | 3.99% | 3 / 3 |
+| 13 | 0.024748 | 0.0708 | 0.3466 | 61.17% | 9.64% | 3 / 3 |
+| 42 | 0.023484 | 0.1166 | 0.4494 | 65.13% | 13.44% | 3 / 3 |
+| 99 | 0.025798 | -0.0327 | 0.1622 | 55.35% | 6.17% | 3 / 3 |
+| 123 | 0.026146 | -0.0585 | 0.1947 | 56.04% | 6.76% | 3 / 3 |
+| Mean +/- std | 0.025329 +/- 0.001089 | 0.0088 +/- 0.0713 | 0.2688 +/- 0.1110 | 58.75% +/- 3.82% | 8.00% +/- 3.26% | - |
+
+Holdout sanity check:
+
+| Seed | Mean holdout MAE | Mean holdout R2 | Mean holdout Pairwise | Mean Improvement | Targets beating baseline |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 7 | 0.033949 | -0.3811 | 47.06% | -7.17% | 0 / 3 |
+| 13 | 0.016053 | -3.4090 | 55.87% | 38.35% | 3 / 3 |
+| 42 | 0.029817 | -0.5234 | 50.43% | -0.57% | 2 / 3 |
+| 99 | 0.031920 | -0.9567 | 45.24% | -3.70% | 1 / 3 |
+| 123 | 0.025835 | -0.6590 | 59.48% | 8.04% | 3 / 3 |
+
+Notes:
+
+- The forest is more stable than the summary model, especially on grouped
+  out-of-fold MAE: the 5-seed CV MAE std is 0.00109 versus the summary
+  holdout seed-stability MAE std of 0.00778.
+- The seed 42 forest result is optimistic for ranking. The conservative
+  multi-seed CV pairwise estimate is about 58.75%, not the single-seed 65.13%.
+- Holdout splits remain noisy and sometimes worse than baseline. Use grouped
+  out-of-fold metrics for pilot forest decisions until there are more labels.
+
 ### Tabular Forest Score-Count Weight Check
 
 Code change:
@@ -568,6 +623,7 @@ Notes:
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_pairwise_stability_seed{7,13,42,99,123}_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_weighted_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
@@ -582,9 +638,11 @@ train-mean baselines.
 The m7000 summary check did not beat the m3000 summary run on MAE, so raising
 `MAX_NOTES` is not automatically helpful for the summary model.
 
-Use `pilot_top100_forest_core_pairwise_best_real` as the current small-data
-ranking baseline, because the pairwise sweep improved grouped CV ranking and
-MAE while using fewer trees than the previous core forest.
+Use the core 200-tree forest as the current small-data ranking baseline, but
+read the seed 42 run as optimistic. The 5-seed grouped-CV estimate is
+0.02533 +/- 0.00109 mean MAE and 58.75% +/- 3.82% pairwise order. This is still
+more stable than summary holdout tuning, but not strong enough to claim final
+model quality.
 Use `pilot_top100_forest_core_pairwise_weighted_real` only when comparing
 label-reliability weighting: it improves mean CV MAE but slightly hurts ranking.
 Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
@@ -593,7 +651,8 @@ the run is heavily truncated and ranking is weaker than the current baselines.
 Next training iteration:
 
 1. Prefer `feature-set=core`, 200 trees, leaf 2, and `sqrt` max features for
-   tabular pilot comparisons.
+   tabular pilot comparisons, but report multi-seed CV averages instead of a
+   single seed 42 score.
 2. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
    effective batch size 16 as a local smoke/tuning baseline only; require
    multi-seed or grouped-CV evidence before trusting summary quality.

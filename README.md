@@ -70,6 +70,23 @@ python -m mania_difficulty.train `
   --run-name synthetic_forest_smoke
 ```
 
+Tune forest parameters with group-aware CV:
+
+```powershell
+python -m mania_difficulty.tools.sweep_forest `
+  --labels data/processed/synthetic/labels.csv `
+  --sequences data/processed/synthetic/sequences `
+  --out-dir outputs/forest_sweep_synthetic `
+  --cv-folds 5 `
+  --group-column beatmapset_id `
+  --trees 200,500 `
+  --min-samples-leaf 1,2,4 `
+  --max-features sqrt,0.75
+```
+
+The sweep writes `sweep_summary.csv`, `sweep_details.csv`,
+`best_params.json`, and `sweep_report.html`.
+
 Open the generated report:
 
 ```powershell
@@ -150,6 +167,21 @@ python -m mania_difficulty.train `
   --cv-folds 5 `
   --group-column beatmapset_id `
   --run-name forest_top100_baseline
+```
+
+Run the same forest sweep on real labels before choosing final forest
+parameters:
+
+```powershell
+python -m mania_difficulty.tools.sweep_forest `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --out-dir outputs/forest_sweep_top100 `
+  --cv-folds 5 `
+  --group-column beatmapset_id `
+  --trees 200,500 `
+  --min-samples-leaf 1,2,4 `
+  --max-features sqrt,0.75
 ```
 
 Train the sequence model:

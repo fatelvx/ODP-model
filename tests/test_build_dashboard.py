@@ -76,7 +76,24 @@ class BuildDashboardTests(unittest.TestCase):
             )
             (audit_dir / "dataset_audit.html").write_text("<html>audit</html>", encoding="utf-8")
             (audit_dir / "dataset_audit.json").write_text(
-                json.dumps({"usable_rows": 10, "missing_sequence_count": 1, "group_count": 3}),
+                json.dumps(
+                    {
+                        "usable_rows": 10,
+                        "missing_sequence_count": 1,
+                        "group_count": 3,
+                        "label_reliability": {
+                            "score_count_available": True,
+                            "usable_score_count_rows": 10,
+                            "low_score_count_threshold": 80,
+                            "low_score_count_rows": 2,
+                            "low_score_count_rate": 0.2,
+                            "full_top100_rows": 6,
+                            "full_top100_rate": 0.6,
+                            "min_score_count": 50,
+                            "median_score_count": 95,
+                        },
+                    }
+                ),
                 encoding="utf-8",
             )
             (sweep_dir / "sweep_report.html").write_text("<html>sweep</html>", encoding="utf-8")
@@ -107,6 +124,11 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("attention_map.png", html)
         self.assertIn("mean_acc", html)
         self.assertIn("Dataset Audit", html)
+        self.assertIn("Label Reliability", html)
+        self.assertIn("Full Top100 Rate", html)
+        self.assertIn("60.00%", html)
+        self.assertIn("Low Score Count Rate", html)
+        self.assertIn("20.00%", html)
         self.assertIn("best_forest", html)
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)

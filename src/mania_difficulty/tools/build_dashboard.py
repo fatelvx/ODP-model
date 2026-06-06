@@ -40,6 +40,40 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def format_percent(value: Any) -> str:
+    try:
+        return f"{float(value):.2%}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def audit_label_reliability_html(summary: dict[str, Any]) -> str:
+    reliability = summary.get("label_reliability", {})
+    if not isinstance(reliability, dict) or not reliability.get("score_count_available"):
+        return ""
+
+    fields = [
+        ("Full Top100 Rows", "full_top100_rows", str),
+        ("Full Top100 Rate", "full_top100_rate", format_percent),
+        ("Low Score Count Rows", "low_score_count_rows", str),
+        ("Low Score Count Rate", "low_score_count_rate", format_percent),
+        ("Low Score Count Threshold", "low_score_count_threshold", str),
+        ("Min Score Count", "min_score_count", str),
+        ("Median Score Count", "median_score_count", str),
+    ]
+    rows = []
+    for label, key, formatter in fields:
+        if key not in reliability:
+            continue
+        rows.append(
+            f"<tr><th>{html.escape(label)}</th>"
+            f"<td>{html.escape(formatter(reliability.get(key)))}</td></tr>"
+        )
+    if not rows:
+        return ""
+    return f"<h3>Label Reliability</h3><table><tbody>{''.join(rows)}</tbody></table>"
+
+
 def audit_section(audit_dir: Path | None, out_html: Path) -> str:
     if not audit_dir or not audit_dir.exists():
         return ""
@@ -63,6 +97,7 @@ def audit_section(audit_dir: Path | None, out_html: Path) -> str:
     return (
         "<section><h2>Dataset Audit</h2>"
         f"<table><tbody>{''.join(rows)}</tbody></table>"
+        f"{audit_label_reliability_html(summary)}"
         f"<p>{links}</p>"
         f"{image(audit_dir / 'dataset_distributions.png', 'Dataset distributions', out_html)}"
         "</section>"

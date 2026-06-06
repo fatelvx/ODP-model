@@ -282,12 +282,13 @@ Each run records the current git commit, branch, and dirty state in
 `metrics.json`, `run_report.html`, and dashboard decision summaries so Colab
 artifacts can be traced back to the code version that produced them.
 
-For neural runs on top100 labels, `--sample-weight-column score_count`
-downweights maps with fewer visible scores. With the defaults above, 100 scores
-maps to weight 1.0, 50 scores maps to 0.5, and very low-count maps bottom out at
-0.25 instead of steering the model as strongly as full top100 labels. Run
-reports and dashboard decision summaries include the train split's mean sample
-weight and downweighted rate so this effect is visible after training.
+For neural and `tabular_forest` runs on top100 labels,
+`--sample-weight-column score_count` downweights maps with fewer visible scores.
+With the defaults above, 100 scores maps to weight 1.0, 50 scores maps to 0.5,
+and very low-count maps bottom out at 0.25 instead of steering the model as
+strongly as full top100 labels. Run reports and dashboard decision summaries
+include the train split's mean sample weight and downweighted rate so this
+effect is visible after training.
 
 For local CPU pilots, use `--model summary`. It is much faster and is meant to
 prove the data/label signal before spending GPU time. Use `--model

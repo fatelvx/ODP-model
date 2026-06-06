@@ -322,6 +322,60 @@ Notes:
 - Fold 5 remains weak and slightly negative-rank, so this is an incremental
   pilot improvement, not final evidence of model quality.
 
+### Tabular Forest Score-Count Weight Check
+
+Code change:
+
+- `tabular_forest` now passes `sample_weight` into sklearn `fit(...)` for both
+  holdout training and grouped CV folds when `--sample-weight-column` is set.
+- Before this change, forest runs only recorded sample-weight metadata; neural
+  runs used the weights, but forests did not.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_forest_core_pairwise_weighted_real `
+  --model tabular_forest `
+  --feature-set core `
+  --forest-trees 200 `
+  --forest-min-samples-leaf 2 `
+  --forest-max-features sqrt `
+  --cv-folds 5 `
+  --group-column beatmapset_id `
+  --max-notes 7000 `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --workers -1 `
+  --seed 42
+```
+
+5-fold grouped out-of-fold metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.017258 | 0.0913 | 0.4557 | 65.24% | 13.21% |
+| acc_std | 0.022799 | 0.0968 | 0.3989 | 63.39% | 16.81% |
+| skill_gap | 0.029509 | 0.0893 | 0.4443 | 64.75% | 13.56% |
+
+Comparison against unweighted pairwise-best forest:
+
+| Run | Mean CV MAE | Mean CV R2 | Mean CV Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: |
+| Unweighted pairwise-best | 0.023484 | 0.1166 | 65.13% | 13.44% |
+| Score-count weighted | 0.023189 | 0.0920 | 64.46% | 14.52% |
+
+Notes:
+
+- Score-count weighting improved mean CV MAE and mean baseline improvement, but
+  reduced R2 and pairwise ordering.
+- Keep `pilot_top100_forest_core_pairwise_best_real` as the ranking baseline.
+  Keep `pilot_top100_forest_core_pairwise_weighted_real` as the reliability/MAE
+  comparison run.
+
 ### Tabular Forest Burst
 
 Command:
@@ -368,6 +422,7 @@ Notes:
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
+- `outputs\runs\pilot_top100_forest_core_pairwise_weighted_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
 ## Current Decision
@@ -380,6 +435,8 @@ The m7000 summary check did not beat the m3000 summary run on MAE, so raising
 Use `pilot_top100_forest_core_pairwise_best_real` as the current small-data
 ranking baseline, because the pairwise sweep improved grouped CV ranking and
 MAE while using fewer trees than the previous core forest.
+Use `pilot_top100_forest_core_pairwise_weighted_real` only when comparing
+label-reliability weighting: it improves mean CV MAE but slightly hurts ranking.
 Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
 the run is heavily truncated and ranking is weaker than the current baselines.
 

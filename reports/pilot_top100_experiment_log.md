@@ -90,6 +90,77 @@ Notes:
 - Prediction spread is too compressed, so the model is mostly learning the
   center of the label distribution.
 
+### LSTM CPU Feasibility Run
+
+Full-length CPU attempt:
+
+- `pilot_top100_lstm_cpu_real_m7000` used `max_notes=7000`, embed 32/hidden
+  64, batch size 4, and did not finish epoch 1 within 10 minutes on CPU.
+- The stale partial run directory only contains a history header and should not
+  be used for comparison.
+
+Completed truncated CPU command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.train `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --run-name pilot_top100_lstm_cpu_real_m1200 `
+  --model lstm `
+  --epochs 3 `
+  --patience 2 `
+  --batch-size 8 `
+  --grad-accum-steps 2 `
+  --checkpoint-metric val_mean_mae `
+  --max-notes 1200 `
+  --group-column beatmapset_id `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --huber-delta 0.5 `
+  --device cpu `
+  --amp off `
+  --lstm-embed-dim 16 `
+  --lstm-hidden-dim 32 `
+  --lstm-layers 1 `
+  --lstm-dropout 0.0 `
+  --lstm-head-dropout 0.2
+```
+
+Truncation audit for this CPU run:
+
+| max_notes | Rows truncated | Truncation rate | Max notes over limit |
+| ---: | ---: | ---: | ---: |
+| 1200 | 42 / 93 | 45.16% | 5214 |
+
+Validation curve:
+
+| Metric | Start | Final |
+| --- | ---: | ---: |
+| Validation mean MAE | 0.02357 | 0.02137 |
+| Validation pairwise order | 42.42% | 46.97% |
+
+Runtime:
+
+| Metric | Value |
+| --- | ---: |
+| Average epoch seconds | 62.04 |
+
+Holdout test metrics:
+
+| Target | MAE | R2 | Pairwise | MAE improvement vs train-mean baseline | MAE improvement vs difficulty rating |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.018690 | -0.0626 | 48.72% | 15.35% | 17.87% |
+| acc_std | 0.022163 | -0.1286 | 30.77% | 22.99% | 25.59% |
+| skill_gap | 0.036376 | -0.1610 | 42.31% | 4.74% | 6.68% |
+
+Notes:
+
+- This proves the LSTM training/evaluation pipeline works on real pilot data.
+- It is not a good quality comparison because 45.16% of maps are truncated.
+- CPU LSTM is too slow for full-length pilot training. Use Colab CUDA for the
+  next real sequence model run.
+
 ### Tabular Forest Core
 
 Command:
@@ -166,6 +237,7 @@ Notes:
 - `outputs\pilot_top100_real_comparison.csv`
 - `outputs\pilot_top100_real_decision_summary.csv`
 - `outputs\runs\pilot_top100_summary_cpu_real_clean\run_report.html`
+- `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_burst_real\run_report.html`
 
@@ -176,13 +248,16 @@ split, but its ranking signal is weak and predictions are compressed.
 
 Use `pilot_top100_forest_core_real` as the current small-data ranking baseline,
 because the 5-fold grouped CV result is more stable than the tiny 13-map holdout.
+Treat `pilot_top100_lstm_cpu_real_m1200` only as a pipeline/performance proof:
+the run is heavily truncated and ranking is weaker than the current baselines.
 
 Next training iteration:
 
 1. Prefer `feature-set=core` for tabular pilot comparisons.
 2. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
-3. Run Colab/GPU LSTM against the same pilot dataset with a larger `MAX_NOTES`
-   and compare against forest core CV, not only holdout MAE.
+3. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
+   and preferably near 7000 if memory allows; CPU full-length LSTM did not
+   finish epoch 1 within 10 minutes.
 4. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

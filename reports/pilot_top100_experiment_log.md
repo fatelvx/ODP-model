@@ -140,6 +140,82 @@ Notes:
   now. Use higher `MAX_NOTES` primarily for real sequence models on GPU, not as
   a guaranteed summary-model improvement.
 
+### Summary CPU Pairwise Sweep
+
+Command:
+
+```powershell
+.\.venv\Scripts\python.exe -m mania_difficulty.tools.sweep_neural `
+  --labels data\processed\labels_pilot_top100.csv `
+  --sequences data\processed\sequences_pilot `
+  --out-dir outputs\neural_sweep_pilot_top100_summary_pairwise_real `
+  --run-prefix pilot_top100_summary_pairwise_sweep_real `
+  --models summary `
+  --epochs 16 `
+  --patience 5 `
+  --batch-size 8,16 `
+  --lrs 0.001,0.0005 `
+  --weight-decays 0.0001 `
+  --summary-hidden-dims 64,96,128 `
+  --summary-dropouts 0.1,0.25 `
+  --huber-deltas 0.5 `
+  --selection-metric mean_pairwise_order_accuracy `
+  --checkpoint-metric val_mean_mae `
+  --max-notes 3000 `
+  --group-column beatmapset_id `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
+  --grad-accum-steps 2 `
+  --grad-clip-norm 1.0 `
+  --device cpu `
+  --amp off `
+  --workers -1 `
+  --seed 42
+```
+
+Sweep result:
+
+| Item | Value |
+| --- | ---: |
+| Candidate count | 24 |
+| Best candidate | `summary_h128_do0p1_lr0p001_wd0p0001_bs8_hd0p5` |
+| Hidden dim | 128 |
+| Dropout | 0.1 |
+| LR | 0.001 |
+| Batch size | 8 |
+| Effective batch size | 16 |
+| Best epoch | 16 |
+| Best validation mean MAE | 0.013813 |
+| Best validation pairwise order | 78.79% |
+
+Best-candidate holdout metrics:
+
+| Target | MAE | R2 | Spearman | Pairwise | MAE improvement vs train-mean baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean_acc | 0.015129 | -0.0019 | 0.0604 | 51.28% | 31.48% |
+| acc_std | 0.017679 | -0.0027 | 0.1209 | 52.56% | 38.57% |
+| skill_gap | 0.026809 | 0.0047 | 0.0330 | 51.28% | 29.79% |
+
+Comparison against previous summary runs:
+
+| Run | Mean holdout MAE | Mean holdout R2 | Mean holdout Pairwise | Mean Improvement |
+| --- | ---: | ---: | ---: | ---: |
+| Summary m3000 baseline | 0.021560 | -0.0247 | 45.30% | 27.72% |
+| Summary m7000 check | 0.021798 | -0.0252 | 52.56% | 26.90% |
+| Summary pairwise sweep best | 0.019872 | 0.0000 | 51.71% | 33.28% |
+
+Notes:
+
+- The sweep improved the summary model's holdout MAE and moved average R2 to
+  roughly break-even, while also improving holdout pairwise order over the
+  original m3000 summary baseline.
+- The sweep did not beat the m7000 summary check on holdout pairwise order, and
+  validation pairwise was much stronger than holdout pairwise. Treat this as a
+  small-data tuning win, not a stable ranking breakthrough.
+- Keep `pilot_top100_forest_core_pairwise_best_real` as the stronger ranking
+  baseline because it has 5-fold grouped out-of-fold pairwise order near 65%.
+
 ### LSTM CPU Feasibility Run
 
 Full-length CPU attempt:
@@ -417,8 +493,10 @@ Notes:
 - `outputs\pilot_top100_real_comparison.csv`
 - `outputs\pilot_top100_real_decision_summary.csv`
 - `outputs\forest_sweep_pilot_top100_pairwise_real\sweep_report.html`
+- `outputs\neural_sweep_pilot_top100_summary_pairwise_real\neural_sweep_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_clean\run_report.html`
 - `outputs\runs\pilot_top100_summary_cpu_real_m7000\run_report.html`
+- `outputs\runs\pilot_top100_summary_pairwise_sweep_real_summary_h128_do0p1_lr0p001_wd0p0001_bs8_hd0p5\run_report.html`
 - `outputs\runs\pilot_top100_lstm_cpu_real_m1200\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_real\run_report.html`
 - `outputs\runs\pilot_top100_forest_core_pairwise_best_real\run_report.html`
@@ -427,8 +505,10 @@ Notes:
 
 ## Current Decision
 
-Do not trust the summary model as "good" yet. It reduces MAE on one holdout
-split, but its ranking signal is weak and predictions are compressed.
+Do not trust the summary model as "good" yet. The summary pairwise sweep
+improved the holdout mean MAE to 0.01987 and moved holdout pairwise order to
+51.71%, but validation ranking was much stronger than holdout ranking, so the
+small split is unstable.
 The m7000 summary check did not beat the m3000 summary run on MAE, so raising
 `MAX_NOTES` is not automatically helpful for the summary model.
 
@@ -444,10 +524,12 @@ Next training iteration:
 
 1. Prefer `feature-set=core`, 200 trees, leaf 2, and `sqrt` max features for
    tabular pilot comparisons.
-2. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
+2. Treat `summary_hidden_dim=128`, `summary_dropout=0.1`, `lr=0.001`, and
+   effective batch size 16 as the current local summary tuning baseline.
+3. Increase `MAX_NOTES` above 3000 for real pilot/Colab runs when memory allows,
    because 15.05% of pilot maps exceed 3000 notes.
-3. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
+4. Run Colab/GPU LSTM against the same pilot dataset with `MAX_NOTES >= 3000`
    and preferably near 7000 if memory allows; CPU full-length LSTM did not
    finish epoch 1 within 10 minutes.
-4. Add more top100 maps before claiming model quality; 93 maps is still a pilot
+5. Add more top100 maps before claiming model quality; 93 maps is still a pilot
    dataset.

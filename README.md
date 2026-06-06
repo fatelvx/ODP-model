@@ -102,8 +102,9 @@ start outputs/runs/synthetic_smoke/run_report.html
 
 Real pilot top100 experiment notes are tracked in
 [`reports/pilot_top100_experiment_log.md`](reports/pilot_top100_experiment_log.md).
-That log summarizes the local 93-map top100 audit, summary CPU training run,
-forest core/burst runs, and current next training decision.
+That log summarizes the local 93-map top100 audit, summary CPU training and
+parameter sweep runs, forest core/burst/weighting runs, and current next
+training decision.
 
 Each run saves:
 

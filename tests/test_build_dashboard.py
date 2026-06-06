@@ -138,6 +138,8 @@ class BuildDashboardTests(unittest.TestCase):
             )
 
             html = out_html.read_text(encoding="utf-8")
+            decision_csv = root / "outputs" / "run_decision_summary.csv"
+            decision_summary = decision_csv.read_text(encoding="utf-8")
 
         self.assertIn("run_a", html)
         self.assertIn("run_report.html", html)
@@ -158,7 +160,10 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("20.00%", html)
         self.assertIn("best_forest", html)
         self.assertIn("Run Decision Summary", html)
+        self.assertIn("run_decision_summary.csv", html)
         self.assertIn("Fix acc_std before longer training", html)
+        self.assertIn("next_action", decision_summary)
+        self.assertIn("Fix acc_std before longer training", decision_summary)
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)
         self.assertIn("0.500000", html)

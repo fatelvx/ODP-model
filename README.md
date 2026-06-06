@@ -386,7 +386,9 @@ python -m mania_difficulty.tools.build_dashboard `
 Start with the dashboard's `Run Decision Summary` table when comparing runs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
 the generated `Next Action`; then use the run cards below it for plots and
-human-review files.
+human-review files. The dashboard command also writes
+`run_decision_summary.csv` beside the HTML so the same summary can be sorted,
+saved, or included in Colab output downloads.
 
 After filling `human_pair_judgment_template.csv` or
 `cv_human_pair_judgment_template.csv`, score whether the model or top100 proxy

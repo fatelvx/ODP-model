@@ -20,6 +20,19 @@ from mania_difficulty.visualize import (
     worst_error_slices_html,
 )
 
+DECISION_COLUMNS = [
+    "run",
+    "model_name",
+    "evaluation",
+    "targets",
+    "mean_mae",
+    "mean_pairwise_order_accuracy",
+    "targets_beating_baseline",
+    "targets_beating_difficulty_rating",
+    "weakest_target",
+    "next_action",
+]
+
 
 def href(path: Path, out_html: Path) -> str:
     return html.escape(os.path.relpath(path, start=out_html.parent).replace("\\", "/"))
@@ -214,16 +227,25 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
 
 
 def run_decision_table(run_dirs: list[Path]) -> str:
-    rows: list[dict[str, object]] = []
-    for run_dir in run_dirs:
-        rows.extend(run_decision_rows(run_dir))
-    if not rows:
+    frame = run_decision_frame(run_dirs)
+    if frame.empty:
         return "<p>No model verdicts found.</p>"
-    frame = pd.DataFrame(rows)
-    return frame.sort_values(["evaluation", "run"]).to_html(
+    return frame.to_html(
         index=False,
         float_format=lambda value: f"{value:.6f}",
     )
+
+
+def run_decision_frame(run_dirs: list[Path]) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for run_dir in run_dirs:
+        rows.extend(run_decision_rows(run_dir))
+    return pd.DataFrame(rows, columns=DECISION_COLUMNS).sort_values(["evaluation", "run"])
+
+
+def write_run_decision_summary_csv(run_dirs: list[Path], out_csv: Path) -> None:
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    run_decision_frame(run_dirs).to_csv(out_csv, index=False, encoding="utf-8")
 
 
 def human_judgment_rows(run_dir: Path) -> list[dict[str, object]]:
@@ -349,10 +371,15 @@ def write_dashboard(
     forest_sweep_dir: Path | None = None,
     neural_sweep_dir: Path | None = None,
     comparison_html: Path | None = None,
+    decision_summary_csv: Path | None = None,
 ) -> None:
     out_html.parent.mkdir(parents=True, exist_ok=True)
     run_dirs = [Path(run_dir) for run_dir in run_dirs if Path(run_dir).exists()]
+    if decision_summary_csv is None:
+        decision_summary_csv = out_html.with_name("run_decision_summary.csv")
+    write_run_decision_summary_csv(run_dirs, decision_summary_csv)
     comparison_link = link(comparison_html, "comparison report", out_html) if comparison_html else ""
+    decision_summary_link = link(decision_summary_csv, "decision summary CSV", out_html)
     run_cards = "".join(run_card(run_dir, out_html) for run_dir in run_dirs)
     report = f"""<!doctype html>
 <html lang="en">
@@ -379,6 +406,7 @@ def write_dashboard(
   {best_params_section("Neural Sweep", neural_sweep_dir, "neural_sweep_report.html", out_html)}
   <section>
     <h2>Run Decision Summary</h2>
+    <p>{decision_summary_link}</p>
     {run_decision_table(run_dirs)}
   </section>
   <section>
@@ -403,6 +431,7 @@ def main() -> None:
     parser.add_argument("--forest-sweep-dir", type=Path, default=None)
     parser.add_argument("--neural-sweep-dir", type=Path, default=None)
     parser.add_argument("--comparison-html", type=Path, default=None)
+    parser.add_argument("--decision-summary-csv", type=Path, default=None)
     args = parser.parse_args()
 
     write_dashboard(
@@ -412,6 +441,7 @@ def main() -> None:
         forest_sweep_dir=args.forest_sweep_dir,
         neural_sweep_dir=args.neural_sweep_dir,
         comparison_html=args.comparison_html,
+        decision_summary_csv=args.decision_summary_csv,
     )
     print(f"Wrote dashboard to {args.out_html}")
 

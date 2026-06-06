@@ -53,6 +53,7 @@ class BuildDashboardTests(unittest.TestCase):
                         "model_harder_beatmap_id,observed_harder_beatmap_id,human_harder_beatmap_id",
                         "11,22,11",
                         "33,44,44",
+                        "55,66,",
                     ]
                 ),
                 encoding="utf-8",
@@ -181,6 +182,13 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("sample_weight_train_mean", decision_summary)
         self.assertIn("sample_weight_train_downweighted_rate", decision_summary)
         self.assertIn("0.72", decision_summary)
+        self.assertIn("human_judged_pairs", decision_summary)
+        self.assertIn("human_judgment_coverage_rate", decision_summary)
+        self.assertIn("human_model_agreement_rate", decision_summary)
+        self.assertIn("human_proxy_agreement_rate", decision_summary)
+        self.assertIn("human_model_vs_proxy_delta", decision_summary)
+        self.assertIn("2", decision_summary)
+        self.assertIn("0.666666", decision_summary)
         self.assertIn("epochs_completed", decision_summary)
         self.assertIn("stop_reason", decision_summary)
         self.assertIn("early_stopped", decision_summary)

@@ -30,6 +30,11 @@ DECISION_COLUMNS = [
     "sample_weight_column",
     "sample_weight_train_mean",
     "sample_weight_train_downweighted_rate",
+    "human_judged_pairs",
+    "human_judgment_coverage_rate",
+    "human_model_agreement_rate",
+    "human_proxy_agreement_rate",
+    "human_model_vs_proxy_delta",
     "epochs_completed",
     "stop_reason",
     "early_stopped",
@@ -40,6 +45,12 @@ DECISION_COLUMNS = [
     "targets_beating_difficulty_rating",
     "weakest_target",
     "next_action",
+]
+
+JUDGMENT_FILES = [
+    ("holdout", "human_pair_judgment_template.csv"),
+    ("cv_oof", "cv_human_pair_judgment_template.csv"),
+    ("checkpoint_eval", "eval_human_pair_judgment_template.csv"),
 ]
 
 
@@ -191,6 +202,7 @@ def metrics_table(run_dirs: list[Path]) -> str:
 
 def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
+    judgment_by_evaluation = human_judgment_summary_by_evaluation(run_dir)
     for metrics_name, default_evaluation in [
         ("metrics.json", "holdout"),
         ("cv_metrics.json", "cv_oof"),
@@ -204,13 +216,15 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
         run_info = metrics.get("_run", {})
         if not isinstance(run_info, dict):
             run_info = {}
+        evaluation = run_info.get("evaluation", default_evaluation)
+        judgment = judgment_by_evaluation.get(str(evaluation), {})
         baseline_target_count = int(summary.get("baseline_target_count", 0))
         difficulty_target_count = int(summary.get("difficulty_baseline_target_count", 0))
         rows.append(
             {
                 "run": run_dir.name,
                 "model_name": run_info.get("model_name", ""),
-                "evaluation": run_info.get("evaluation", default_evaluation),
+                "evaluation": evaluation,
                 "device": run_info.get("device", ""),
                 "amp_enabled": run_info.get("amp_enabled", ""),
                 "effective_batch_size": run_info.get("effective_batch_size", ""),
@@ -218,6 +232,23 @@ def run_decision_rows(run_dir: Path) -> list[dict[str, object]]:
                 "sample_weight_train_mean": run_info.get("sample_weight_train_mean", ""),
                 "sample_weight_train_downweighted_rate": run_info.get(
                     "sample_weight_train_downweighted_rate",
+                    "",
+                ),
+                "human_judged_pairs": judgment.get("human_judged_pairs", ""),
+                "human_judgment_coverage_rate": judgment.get(
+                    "human_judgment_coverage_rate",
+                    "",
+                ),
+                "human_model_agreement_rate": judgment.get(
+                    "human_model_agreement_rate",
+                    "",
+                ),
+                "human_proxy_agreement_rate": judgment.get(
+                    "human_proxy_agreement_rate",
+                    "",
+                ),
+                "human_model_vs_proxy_delta": judgment.get(
+                    "human_model_vs_proxy_delta",
                     "",
                 ),
                 "epochs_completed": run_info.get("epochs_completed", ""),
@@ -269,13 +300,33 @@ def write_run_decision_summary_csv(run_dirs: list[Path], out_csv: Path) -> None:
     run_decision_frame(run_dirs).to_csv(out_csv, index=False, encoding="utf-8")
 
 
+def human_judgment_summary_by_evaluation(run_dir: Path) -> dict[str, dict[str, object]]:
+    rows: dict[str, dict[str, object]] = {}
+    for evaluation, filename in JUDGMENT_FILES:
+        path = run_dir / filename
+        if not path.exists():
+            continue
+        try:
+            score = score_pair_judgments(path)
+        except (KeyError, ValueError, pd.errors.EmptyDataError):
+            continue
+        rows[evaluation] = {
+            "human_judged_pairs": (
+                f"{score['judged_count']} / {score['row_count']}"
+                if score["row_count"]
+                else "0 / 0"
+            ),
+            "human_judgment_coverage_rate": score["judgment_coverage_rate"],
+            "human_model_agreement_rate": score["model_agreement_rate"],
+            "human_proxy_agreement_rate": score["proxy_agreement_rate"],
+            "human_model_vs_proxy_delta": score["model_vs_proxy_agreement_delta"],
+        }
+    return rows
+
+
 def human_judgment_rows(run_dir: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for evaluation, filename in [
-        ("holdout", "human_pair_judgment_template.csv"),
-        ("cv_oof", "cv_human_pair_judgment_template.csv"),
-        ("checkpoint_eval", "eval_human_pair_judgment_template.csv"),
-    ]:
+    for evaluation, filename in JUDGMENT_FILES:
         path = run_dir / filename
         if not path.exists():
             continue

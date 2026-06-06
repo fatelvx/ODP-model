@@ -400,8 +400,10 @@ Start with the dashboard's `Run Decision Summary` table when comparing runs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
 the generated `Next Action`; it also keeps device, AMP, effective batch size,
 epochs completed, and stop reason visible so Colab GPU runs are easier to
-compare. Then use the run cards below it for plots and human-review files. The
-dashboard command also writes
+compare. If a judgment template has been filled, the summary also shows human
+judgment coverage plus model/proxy agreement rates so runs can be compared
+against manual harder/easier calls. Then use the run cards below it for plots
+and human-review files. The dashboard command also writes
 `run_decision_summary.csv` beside the HTML so the same summary can be sorted,
 saved, or included in Colab output downloads.
 

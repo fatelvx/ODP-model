@@ -134,6 +134,9 @@ class RunReportTests(unittest.TestCase):
                             "batch_size": 8,
                             "grad_accum_steps": 2,
                             "effective_batch_size": 16,
+                            "sample_weight_column": "score_count",
+                            "sample_weight_min": 0.25,
+                            "sample_weight_max_value": 100.0,
                             "checkpoint_metric": "val_mean_pairwise_order_accuracy",
                             "best_checkpoint_score": 0.72,
                             "best_epoch": 2,
@@ -181,6 +184,10 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Grad Accum Steps", report)
         self.assertIn("Effective Batch Size", report)
         self.assertIn("16", report)
+        self.assertIn("Sample Weight Column", report)
+        self.assertIn("score_count", report)
+        self.assertIn("Sample Weight Min", report)
+        self.assertIn("Sample Weight Max Value", report)
         self.assertIn("Checkpoint Metric", report)
         self.assertIn("val_mean_pairwise_order_accuracy", report)
         self.assertIn("Best Checkpoint Score", report)

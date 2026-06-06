@@ -97,6 +97,7 @@ class BuildDashboardTests(unittest.TestCase):
                             "device": "cuda",
                             "amp_enabled": True,
                             "effective_batch_size": 64,
+                            "sample_weight_column": "score_count",
                             "epochs_completed": 3,
                             "stop_reason": "early_stopping",
                             "early_stopped": True,
@@ -173,6 +174,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("cuda", decision_summary)
         self.assertIn("amp_enabled", decision_summary)
         self.assertIn("effective_batch_size", decision_summary)
+        self.assertIn("sample_weight_column", decision_summary)
+        self.assertIn("score_count", decision_summary)
         self.assertIn("epochs_completed", decision_summary)
         self.assertIn("stop_reason", decision_summary)
         self.assertIn("early_stopped", decision_summary)

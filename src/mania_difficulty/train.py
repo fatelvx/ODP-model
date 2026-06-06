@@ -205,6 +205,23 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def positive_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Expected a positive float.") from error
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("Expected a positive float.")
+    return parsed
+
+
+def sample_weight_min_float(value: str) -> float:
+    parsed = positive_float(value)
+    if parsed > 1:
+        raise argparse.ArgumentTypeError("Sample weight min must be in (0, 1].")
+    return parsed
+
+
 def gradient_accumulation_steps(args: argparse.Namespace) -> int:
     return max(1, int(getattr(args, "grad_accum_steps", 1)))
 
@@ -273,9 +290,27 @@ def model_config_from_args(args: argparse.Namespace) -> dict[str, object]:
     return {}
 
 
-def weighted_huber_loss(pred: torch.Tensor, target: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+def weighted_huber_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    weights: torch.Tensor,
+    sample_weights: torch.Tensor | None = None,
+) -> torch.Tensor:
     loss = nn.functional.huber_loss(pred, target, reduction="none", delta=1.0)
-    return (loss * weights).mean()
+    weighted = loss * weights
+    if sample_weights is not None:
+        sample_weights = sample_weights.to(device=weighted.device, dtype=weighted.dtype).view(-1, 1)
+        weighted = weighted * sample_weights
+        return weighted.mean() / sample_weights.mean().clamp_min(1e-6)
+    return weighted.mean()
+
+
+def sample_weight_metadata(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        "sample_weight_column": getattr(args, "sample_weight_column", ""),
+        "sample_weight_min": getattr(args, "sample_weight_min", ""),
+        "sample_weight_max_value": getattr(args, "sample_weight_max_value", ""),
+    }
 
 
 def dataloader_options(args: argparse.Namespace, device: torch.device) -> dict[str, object]:
@@ -924,6 +959,7 @@ def write_tabular_cross_validation(
         "evaluation": "cv_oof",
         "feature_set": args.feature_set,
         **runtime_environment_metadata(args, torch.device("cpu")),
+        **sample_weight_metadata(args),
         "cv_folds": args.cv_folds,
         "split_strategy": split_strategy,
         "group_column": args.group_column if split_strategy.startswith("group:") else "",
@@ -1042,6 +1078,7 @@ def train_tabular_forest(
         "evaluation": "holdout",
         "feature_set": args.feature_set,
         **runtime_environment_metadata(args, torch.device("cpu")),
+        **sample_weight_metadata(args),
         **split_metadata,
         "best_epoch": 1,
         "best_val_loss": val_loss,
@@ -1078,7 +1115,14 @@ def train(args: argparse.Namespace) -> Path:
     run_dir = Path("outputs/runs") / args.run_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset = ManiaDifficultyDataset(args.labels, args.sequences, target_columns=target_columns)
+    dataset = ManiaDifficultyDataset(
+        args.labels,
+        args.sequences,
+        target_columns=target_columns,
+        sample_weight_column=getattr(args, "sample_weight_column", ""),
+        sample_weight_min=getattr(args, "sample_weight_min", 0.25),
+        sample_weight_max_value=getattr(args, "sample_weight_max_value", 100.0),
+    )
     if len(dataset) < 10:
         raise RuntimeError("Need at least 10 maps for train/val/test split.")
 
@@ -1238,11 +1282,17 @@ def train(args: argparse.Namespace) -> Path:
             features = batch.features.to(device)
             lengths = batch.lengths.to(device)
             targets = batch.targets.to(device)
+            sample_weights = batch.sample_weights.to(device)
             normalized_targets = transform_targets(targets, target_mean_t, target_std_t)
 
             with autocast_context(device, amp_active):
                 pred = model(features, lengths)
-                loss = weighted_huber_loss(pred, normalized_targets, loss_weights)
+                loss = weighted_huber_loss(
+                    pred,
+                    normalized_targets,
+                    loss_weights,
+                    sample_weights if getattr(args, "sample_weight_column", "") else None,
+                )
             group_start = ((batch_index - 1) // grad_accum_steps) * grad_accum_steps + 1
             accumulation_divisor = min(grad_accum_steps, train_batch_count - group_start + 1)
             scaler.scale(loss / accumulation_divisor).backward()
@@ -1410,6 +1460,7 @@ def train(args: argparse.Namespace) -> Path:
         "evaluation": "holdout",
         "model_config": model.config,
         **runtime_environment_metadata(args, device),
+        **sample_weight_metadata(args),
         **split_metadata,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
@@ -1509,6 +1560,23 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         default=[1.0, 0.5, 0.5],
         help="Weights matching --targets. Falls back to all ones if the count differs.",
+    )
+    parser.add_argument(
+        "--sample-weight-column",
+        default="",
+        help="Optional label column for per-map training weights, e.g. score_count.",
+    )
+    parser.add_argument(
+        "--sample-weight-min",
+        type=sample_weight_min_float,
+        default=0.25,
+        help="Minimum per-map sample weight when --sample-weight-column is set.",
+    )
+    parser.add_argument(
+        "--sample-weight-max-value",
+        type=positive_float,
+        default=100.0,
+        help="Column value that maps to sample weight 1.0.",
     )
     parser.add_argument("--forest-trees", type=int, default=400)
     parser.add_argument("--forest-min-samples-leaf", type=int, default=2)

@@ -244,6 +244,9 @@ python -m mania_difficulty.train `
   --epochs 50 `
   --batch-size 32 `
   --checkpoint-metric val_mean_mae `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
   --model lstm `
   --run-name lstm_top100_baseline
 ```
@@ -252,6 +255,11 @@ For neural runs, `--checkpoint-metric` controls which epoch becomes
 `best_model.pt` and drives early stopping. Use `val_mean_mae` for the most
 readable validation error, or `val_mean_pairwise_order_accuracy` when the
 priority is ranking map pairs in the same harder/easier direction.
+
+For neural runs on top100 labels, `--sample-weight-column score_count`
+downweights maps with fewer visible scores. With the defaults above, 100 scores
+maps to weight 1.0, 50 scores maps to 0.5, and very low-count maps bottom out at
+0.25 instead of steering the model as strongly as full top100 labels.
 
 For local CPU pilots, use `--model summary`. It is much faster and is meant to
 prove the data/label signal before spending GPU time. Use `--model
@@ -307,6 +315,9 @@ python -m mania_difficulty.tools.sweep_neural `
   --batch-size 32 `
   --grad-accum-steps 1 `
   --checkpoint-metric val_mean_mae `
+  --sample-weight-column score_count `
+  --sample-weight-min 0.25 `
+  --sample-weight-max-value 100 `
   --lrs 0.001,0.0005 `
   --weight-decays 0.0001 `
   --lstm-embed-dims 32,64 `

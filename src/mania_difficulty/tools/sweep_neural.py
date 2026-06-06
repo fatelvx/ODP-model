@@ -12,7 +12,13 @@ import numpy as np
 import pandas as pd
 
 from mania_difficulty.data.dataset import DEFAULT_TARGET_COLUMNS
-from mania_difficulty.train import CHECKPOINT_METRICS, positive_int, train
+from mania_difficulty.train import (
+    CHECKPOINT_METRICS,
+    positive_float,
+    positive_int,
+    sample_weight_min_float,
+    train,
+)
 from mania_difficulty.tools.sweep_selection import (
     parse_selection_metric,
     selection_sort_ascending,
@@ -208,6 +214,9 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         device=base_args.device,
         model=candidate["model"],
         loss_weights=base_args.loss_weights,
+        sample_weight_column=getattr(base_args, "sample_weight_column", ""),
+        sample_weight_min=getattr(base_args, "sample_weight_min", 0.25),
+        sample_weight_max_value=getattr(base_args, "sample_weight_max_value", 100.0),
         forest_trees=400,
         forest_min_samples_leaf=2,
         forest_max_features="sqrt",
@@ -376,6 +385,9 @@ def main() -> None:
     parser.add_argument("--device", default="")
     parser.add_argument("--models", type=parse_model_list, default=["summary"])
     parser.add_argument("--loss-weights", type=float, nargs="*", default=[1.0, 0.5, 0.5])
+    parser.add_argument("--sample-weight-column", default="")
+    parser.add_argument("--sample-weight-min", type=sample_weight_min_float, default=0.25)
+    parser.add_argument("--sample-weight-max-value", type=positive_float, default=100.0)
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--loader-workers", type=int, default=0)
     parser.add_argument("--pin-memory", choices=["auto", "on", "off"], default="auto")

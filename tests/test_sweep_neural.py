@@ -77,6 +77,9 @@ class SweepNeuralTests(unittest.TestCase):
             seed=42,
             device="cuda",
             loss_weights=[1.0, 0.5, 0.5],
+            sample_weight_column="score_count",
+            sample_weight_min=0.25,
+            sample_weight_max_value=100.0,
             workers=0,
             loader_workers=2,
             pin_memory="auto",
@@ -118,6 +121,9 @@ class SweepNeuralTests(unittest.TestCase):
         self.assertEqual(train_args.grad_accum_steps, 2)
         self.assertEqual(train_args.checkpoint_metric, "val_mean_mae")
         self.assertEqual(train_args.checkpoint_backup_dir, Path("drive/checkpoints"))
+        self.assertEqual(train_args.sample_weight_column, "score_count")
+        self.assertEqual(train_args.sample_weight_min, 0.25)
+        self.assertEqual(train_args.sample_weight_max_value, 100.0)
 
     def test_candidate_train_args_passes_transformer_options(self):
         base_args = SimpleNamespace(

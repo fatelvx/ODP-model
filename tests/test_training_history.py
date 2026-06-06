@@ -3,11 +3,13 @@ import unittest
 from pathlib import Path
 
 import pandas as pd
+import torch
 
 from mania_difficulty.train import (
     append_history,
     checkpoint_metric_improved,
     checkpoint_metric_score,
+    weighted_huber_loss,
     write_history_header,
 )
 
@@ -91,6 +93,18 @@ class TrainingHistoryTests(unittest.TestCase):
         self.assertFalse(
             checkpoint_metric_improved("val_mean_pairwise_order_accuracy", 0.7, 0.75)
         )
+
+    def test_weighted_huber_loss_downweights_low_reliability_samples(self):
+        pred = torch.tensor([[1.0], [3.0]])
+        target = torch.zeros_like(pred)
+        target_weights = torch.ones(1)
+        sample_weights = torch.tensor([1.0, 0.25])
+
+        unweighted = weighted_huber_loss(pred, target, target_weights)
+        weighted = weighted_huber_loss(pred, target, target_weights, sample_weights)
+
+        self.assertLess(float(weighted), float(unweighted))
+        self.assertAlmostEqual(float(weighted), 0.9, places=6)
 
 
 if __name__ == "__main__":

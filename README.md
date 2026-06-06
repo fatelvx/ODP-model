@@ -118,6 +118,8 @@ Metrics include a train-mean baseline when available:
 - `baseline_mae`: MAE from predicting the training mean for that target
 - `mae_improvement_vs_baseline`: positive means the model beat that baseline
 - `mae_improvement_pct`: the same improvement as a percent
+- `spearman`: rank correlation between predicted and observed proxy values
+- `pairwise_order_accuracy`: percent of map pairs ranked in the same order by model and proxy
 
 When the label file has `beatmapset_id`, train/validation/test and
 cross-validation splits keep the same beatmapset in only one split. This avoids

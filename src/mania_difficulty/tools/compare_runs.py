@@ -30,6 +30,8 @@ def metrics_rows(run_dir: Path, metrics_path: Path, evaluation: str) -> list[dic
                 "target": target,
                 "mae": values.get("mae"),
                 "r2": values.get("r2"),
+                "spearman": values.get("spearman"),
+                "pairwise_order_accuracy": values.get("pairwise_order_accuracy"),
                 "baseline_mae": values.get("baseline_mae"),
                 "mae_improvement_vs_baseline": values.get("mae_improvement_vs_baseline"),
                 "mae_improvement_pct": values.get("mae_improvement_pct"),

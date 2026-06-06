@@ -182,6 +182,8 @@ def target_metric_rows(candidate: dict[str, Any], metrics: dict[str, Any]) -> li
                 "target": target,
                 "mae": values.get("mae"),
                 "r2": values.get("r2"),
+                "spearman": values.get("spearman"),
+                "pairwise_order_accuracy": values.get("pairwise_order_accuracy"),
                 "baseline_mae": values.get("baseline_mae"),
                 "mae_improvement_vs_baseline": values.get("mae_improvement_vs_baseline"),
                 "mae_improvement_pct": values.get("mae_improvement_pct"),
@@ -203,6 +205,10 @@ def summarize_run(
         "run_dir": str(run_dir),
         "mean_mae": float(np.mean([row["mae"] for row in rows])),
         "mean_r2": float(np.mean([row["r2"] for row in rows])),
+        "mean_spearman": float(np.mean([row["spearman"] for row in rows])),
+        "mean_pairwise_order_accuracy": float(
+            np.mean([row["pairwise_order_accuracy"] for row in rows])
+        ),
         "mean_baseline_mae": float(np.mean([row["baseline_mae"] for row in rows])),
         "mean_improvement_pct": float(np.mean([row["mae_improvement_pct"] for row in rows])),
         "best_epoch": run_info.get("best_epoch"),

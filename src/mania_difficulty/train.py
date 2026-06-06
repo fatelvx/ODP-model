@@ -462,6 +462,8 @@ def write_cv_fold_metrics(path: Path, rows: list[dict[str, object]]) -> None:
         "target",
         "mae",
         "r2",
+        "spearman",
+        "pairwise_order_accuracy",
         "baseline_mae",
         "mae_improvement_vs_baseline",
         "mae_improvement_pct",

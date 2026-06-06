@@ -78,12 +78,15 @@ def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
             f"<td>{html.escape(target)}</td>"
             f"<td>{target_metrics.get('mae', float('nan')):.6f}</td>"
             f"<td>{target_metrics.get('r2', float('nan')):.4f}</td>"
+            f"<td>{target_metrics.get('spearman', float('nan')):.4f}</td>"
+            f"<td>{target_metrics.get('pairwise_order_accuracy', float('nan')):.2%}</td>"
             f"<td>{baseline_mae:.6f}</td>"
             f"<td>{improvement_pct * 100:.2f}%</td>"
             "</tr>"
         )
     return (
         "<table><thead><tr><th>Target</th><th>MAE</th><th>R2</th>"
+        "<th>Spearman</th><th>Pairwise Order</th>"
         "<th>Baseline MAE</th><th>Improvement</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )

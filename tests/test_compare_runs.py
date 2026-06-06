@@ -15,6 +15,8 @@ class CompareRunsTests(unittest.TestCase):
                 "mean_acc": {
                     "mae": 0.2,
                     "r2": 0.1,
+                    "spearman": 0.8,
+                    "pairwise_order_accuracy": 0.75,
                     "baseline_mae": 0.3,
                     "mae_improvement_pct": 0.333,
                 },
@@ -42,6 +44,8 @@ class CompareRunsTests(unittest.TestCase):
         self.assertEqual([row["evaluation"] for row in rows], ["holdout", "cv_oof"])
         self.assertEqual(rows[1]["cv_folds"], 3)
         self.assertEqual(rows[0]["baseline_mae"], 0.3)
+        self.assertEqual(rows[0]["spearman"], 0.8)
+        self.assertEqual(rows[0]["pairwise_order_accuracy"], 0.75)
 
 
 if __name__ == "__main__":

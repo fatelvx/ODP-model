@@ -155,6 +155,10 @@ def evaluate_candidate(
         **candidate,
         "mean_mae": float(np.mean([row["mae"] for row in target_rows])),
         "mean_r2": float(np.mean([row["r2"] for row in target_rows])),
+        "mean_spearman": float(np.mean([row["spearman"] for row in target_rows])),
+        "mean_pairwise_order_accuracy": float(
+            np.mean([row["pairwise_order_accuracy"] for row in target_rows])
+        ),
         "mean_baseline_mae": float(np.mean([row["baseline_mae"] for row in target_rows])),
         "mean_improvement_pct": float(np.mean([row["mae_improvement_pct"] for row in target_rows])),
     }

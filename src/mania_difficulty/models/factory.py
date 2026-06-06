@@ -4,6 +4,7 @@ from torch import nn
 
 from mania_difficulty.models.lstm import LSTMDifficultyModel
 from mania_difficulty.models.summary import SummaryDifficultyModel
+from mania_difficulty.models.transformer import TransformerDifficultyModel
 
 
 def create_model(model_name: str, *, output_dim: int, config: dict | None = None) -> nn.Module:
@@ -14,4 +15,7 @@ def create_model(model_name: str, *, output_dim: int, config: dict | None = None
     if model_name == "summary":
         config.setdefault("output_dim", output_dim)
         return SummaryDifficultyModel(**config)
+    if model_name == "transformer":
+        config.setdefault("output_dim", output_dim)
+        return TransformerDifficultyModel(**config)
     raise ValueError(f"Unknown model: {model_name}")

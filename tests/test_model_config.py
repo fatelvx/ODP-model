@@ -42,6 +42,28 @@ class ModelConfigTests(unittest.TestCase):
         self.assertEqual(config["hidden_dim"], 96)
         self.assertEqual(config["dropout"], 0.35)
 
+    def test_transformer_config_uses_cli_values(self):
+        args = SimpleNamespace(
+            model="transformer",
+            max_notes=512,
+            transformer_embed_dim=48,
+            transformer_heads=6,
+            transformer_layers=2,
+            transformer_ff_dim=192,
+            transformer_dropout=0.15,
+            transformer_head_dropout=0.25,
+        )
+
+        config = model_config_from_args(args)
+
+        self.assertEqual(config["embed_dim"], 48)
+        self.assertEqual(config["num_heads"], 6)
+        self.assertEqual(config["num_layers"], 2)
+        self.assertEqual(config["ff_dim"], 192)
+        self.assertEqual(config["dropout"], 0.15)
+        self.assertEqual(config["head_dropout"], 0.25)
+        self.assertEqual(config["max_positions"], 512)
+
     def test_tabular_forest_has_no_torch_model_config(self):
         args = SimpleNamespace(model="tabular_forest")
 

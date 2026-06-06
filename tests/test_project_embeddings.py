@@ -8,6 +8,7 @@ import torch
 
 from mania_difficulty.models.lstm import LSTMDifficultyModel
 from mania_difficulty.models.summary import SummaryDifficultyModel
+from mania_difficulty.models.transformer import TransformerDifficultyModel
 from mania_difficulty.tools.project_embeddings import write_embedding_projection
 
 
@@ -18,9 +19,18 @@ class ProjectEmbeddingsTests(unittest.TestCase):
 
         summary = SummaryDifficultyModel(hidden_dim=8, output_dim=3)
         lstm = LSTMDifficultyModel(embed_dim=4, hidden_dim=6, num_layers=1, output_dim=3)
+        transformer = TransformerDifficultyModel(
+            embed_dim=16,
+            num_heads=4,
+            num_layers=1,
+            ff_dim=32,
+            output_dim=3,
+            max_positions=8,
+        )
 
         self.assertEqual(tuple(summary.encode(features, lengths).shape), (2, 4))
         self.assertEqual(tuple(lstm.encode(features, lengths).shape), (2, 12))
+        self.assertEqual(tuple(transformer.encode(features, lengths).shape), (2, 16))
 
     def test_write_embedding_projection_exports_csv_png_and_html(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -71,6 +81,7 @@ class ProjectEmbeddingsTests(unittest.TestCase):
 
             projection = pd.read_csv(out_csv)
             report = out_html.read_text(encoding="utf-8")
+            run_report = (root / "run_report.html").read_text(encoding="utf-8")
             png_exists = out_png.exists()
 
         self.assertIn("projection_x", projection.columns)
@@ -80,6 +91,7 @@ class ProjectEmbeddingsTests(unittest.TestCase):
         self.assertTrue(png_exists)
         self.assertIn("Embedding Projection", report)
         self.assertIn("embedding_projection.csv", report)
+        self.assertIn("Embedding Projection", run_report)
 
 
 if __name__ == "__main__":

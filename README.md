@@ -231,9 +231,27 @@ python -m mania_difficulty.train `
 For local CPU pilots, use `--model summary`. It is much faster and is meant to
 prove the data/label signal before spending GPU time. Use `--model
 tabular_forest` as the small-data baseline and `--model lstm` in Colab or on a
-GPU machine.
+GPU machine. After the LSTM route is stable, `--model transformer` is available
+as the heavier sequence baseline for later attention analysis.
 
 Neural model architecture knobs are CLI-controlled and saved in each run report:
+
+```powershell
+python -m mania_difficulty.train `
+  --labels data/processed/labels.csv `
+  --sequences data/processed/sequences `
+  --model transformer `
+  --run-name transformer_top100_pilot `
+  --max-notes 3000 `
+  --transformer-embed-dim 64 `
+  --transformer-heads 4 `
+  --transformer-layers 3 `
+  --transformer-ff-dim 256 `
+  --transformer-dropout 0.1 `
+  --transformer-head-dropout 0.2
+```
+
+For LSTM tuning:
 
 ```powershell
 python -m mania_difficulty.train `
@@ -248,7 +266,9 @@ python -m mania_difficulty.train `
   --lstm-head-dropout 0.3
 ```
 
-Tune summary/LSTM neural parameters with a holdout sweep:
+Tune summary/LSTM/Transformer neural parameters with a holdout sweep. Keep
+`--models lstm` for the normal Colab path; include `transformer` only when you
+want to spend extra GPU time:
 
 ```powershell
 python -m mania_difficulty.tools.sweep_neural `
@@ -267,6 +287,10 @@ python -m mania_difficulty.tools.sweep_neural `
   --lstm-layers 1,2 `
   --lstm-dropouts 0.1,0.2 `
   --lstm-head-dropouts 0.2 `
+  --transformer-embed-dims 32,64 `
+  --transformer-heads 4 `
+  --transformer-layers 1,2 `
+  --transformer-ff-dims 128,256 `
   --selection-metric mean_pairwise_order_accuracy `
   --max-candidates 4 `
   --loader-workers 2 `
@@ -350,6 +374,9 @@ Recommended workflow:
 
 The notebook includes a synthetic smoke path and a real-data path. For real
 data, keep API credentials in the notebook session only; do not commit them.
+The real-data path keeps LSTM as the normal Colab default, but if the neural
+sweep is changed to include `transformer`, the final run and dashboard use
+`colab_{model}_top100` automatically.
 
 VS Code should recommend the official `google.colab` extension when this repo is
 opened.
@@ -360,5 +387,6 @@ opened.
 - Score fetching sleeps between requests by default.
 - `fetch_maps.py` uses osu!'s current `beatmapsets/search` API shape and filters
   for 4K mania beatmaps from the returned beatmapsets.
-- The model starts with LSTM because it is easier to train and debug. Transformer
-  attention analysis can come after the baseline is trustworthy.
+- The default sequence path stays on LSTM because it is easier to train and
+  debug. Transformer training is available for GPU pilots and future attention
+  analysis once the baseline is trustworthy.

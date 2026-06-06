@@ -38,7 +38,7 @@ def parse_float_list(value: str) -> list[float]:
 
 def parse_model_list(value: str) -> list[str]:
     items = [item.strip() for item in value.split(",") if item.strip()]
-    allowed = {"summary", "lstm"}
+    allowed = {"summary", "lstm", "transformer"}
     invalid = [item for item in items if item not in allowed]
     if invalid:
         raise argparse.ArgumentTypeError(f"Unknown neural models: {invalid}")
@@ -55,6 +55,11 @@ def model_size_score(candidate: dict[str, Any]) -> int:
     if candidate["model"] == "summary":
         hidden_dim = int(candidate["summary_hidden_dim"])
         return hidden_dim + hidden_dim // 2
+    if candidate["model"] == "transformer":
+        embed_dim = int(candidate["transformer_embed_dim"])
+        layers = int(candidate["transformer_layers"])
+        ff_dim = int(candidate["transformer_ff_dim"])
+        return embed_dim * max(1, layers) + ff_dim * max(1, layers)
     embed_dim = int(candidate["lstm_embed_dim"])
     hidden_dim = int(candidate["lstm_hidden_dim"])
     layers = int(candidate["lstm_layers"])
@@ -74,9 +79,21 @@ def neural_grid(
     lstm_layers: list[int],
     lstm_dropouts: list[float],
     lstm_head_dropouts: list[float],
+    transformer_embed_dims: list[int] | None = None,
+    transformer_heads: list[int] | None = None,
+    transformer_layers: list[int] | None = None,
+    transformer_ff_dims: list[int] | None = None,
+    transformer_dropouts: list[float] | None = None,
+    transformer_head_dropouts: list[float] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     shared_options = list(product(lrs, weight_decays, batch_sizes))
+    transformer_embed_dims = transformer_embed_dims or [64]
+    transformer_heads = transformer_heads or [4]
+    transformer_layers = transformer_layers or [2]
+    transformer_ff_dims = transformer_ff_dims or [256]
+    transformer_dropouts = transformer_dropouts or [0.1]
+    transformer_head_dropouts = transformer_head_dropouts or [0.2]
     for model_name in models:
         if model_name == "summary":
             for lr, weight_decay, batch_size in shared_options:
@@ -116,6 +133,35 @@ def neural_grid(
                         "lstm_layers": layers,
                         "lstm_dropout": dropout,
                         "lstm_head_dropout": head_dropout,
+                        "lr": lr,
+                        "weight_decay": weight_decay,
+                        "batch_size": batch_size,
+                    }
+                    candidate["model_size_score"] = model_size_score(candidate)
+                    candidates.append(candidate)
+        elif model_name == "transformer":
+            for lr, weight_decay, batch_size in shared_options:
+                for embed_dim, heads, layers, ff_dim, dropout, head_dropout in product(
+                    transformer_embed_dims,
+                    transformer_heads,
+                    transformer_layers,
+                    transformer_ff_dims,
+                    transformer_dropouts,
+                    transformer_head_dropouts,
+                ):
+                    candidate = {
+                        "candidate_id": (
+                            f"transformer_e{embed_dim}_h{heads}_l{layers}_ff{ff_dim}_"
+                            f"do{value_token(dropout)}_head{value_token(head_dropout)}_"
+                            f"lr{value_token(lr)}_wd{value_token(weight_decay)}_bs{batch_size}"
+                        ),
+                        "model": "transformer",
+                        "transformer_embed_dim": embed_dim,
+                        "transformer_heads": heads,
+                        "transformer_layers": layers,
+                        "transformer_ff_dim": ff_dim,
+                        "transformer_dropout": dropout,
+                        "transformer_head_dropout": head_dropout,
                         "lr": lr,
                         "weight_decay": weight_decay,
                         "batch_size": batch_size,
@@ -180,6 +226,27 @@ def candidate_train_args(base_args: argparse.Namespace, candidate: dict[str, Any
         ),
         summary_hidden_dim=int(candidate.get("summary_hidden_dim", base_args.summary_hidden_dims[0])),
         summary_dropout=float(candidate.get("summary_dropout", base_args.summary_dropouts[0])),
+        transformer_embed_dim=int(
+            candidate.get("transformer_embed_dim", getattr(base_args, "transformer_embed_dims", [64])[0])
+        ),
+        transformer_heads=int(
+            candidate.get("transformer_heads", getattr(base_args, "transformer_heads", [4])[0])
+        ),
+        transformer_layers=int(
+            candidate.get("transformer_layers", getattr(base_args, "transformer_layers", [2])[0])
+        ),
+        transformer_ff_dim=int(
+            candidate.get("transformer_ff_dim", getattr(base_args, "transformer_ff_dims", [256])[0])
+        ),
+        transformer_dropout=float(
+            candidate.get("transformer_dropout", getattr(base_args, "transformer_dropouts", [0.1])[0])
+        ),
+        transformer_head_dropout=float(
+            candidate.get(
+                "transformer_head_dropout",
+                getattr(base_args, "transformer_head_dropouts", [0.2])[0],
+            )
+        ),
     )
 
 
@@ -284,7 +351,7 @@ def write_html_report(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sweep summary/LSTM neural parameters.")
+    parser = argparse.ArgumentParser(description="Sweep summary/LSTM/Transformer neural parameters.")
     parser.add_argument("--labels", type=Path, required=True)
     parser.add_argument("--sequences", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, default=Path("outputs/neural_sweep"))
@@ -312,6 +379,12 @@ def main() -> None:
     parser.add_argument("--lstm-layers", type=parse_int_list, default=[1, 2])
     parser.add_argument("--lstm-dropouts", type=parse_float_list, default=[0.1, 0.2])
     parser.add_argument("--lstm-head-dropouts", type=parse_float_list, default=[0.2, 0.3])
+    parser.add_argument("--transformer-embed-dims", type=parse_int_list, default=[32, 64])
+    parser.add_argument("--transformer-heads", type=parse_int_list, default=[4])
+    parser.add_argument("--transformer-layers", type=parse_int_list, default=[1, 2])
+    parser.add_argument("--transformer-ff-dims", type=parse_int_list, default=[128, 256])
+    parser.add_argument("--transformer-dropouts", type=parse_float_list, default=[0.1])
+    parser.add_argument("--transformer-head-dropouts", type=parse_float_list, default=[0.2])
     parser.add_argument("--selection-metric", type=parse_selection_metric, default="mean_mae")
     parser.add_argument(
         "--max-candidates",
@@ -333,6 +406,12 @@ def main() -> None:
         lstm_layers=args.lstm_layers,
         lstm_dropouts=args.lstm_dropouts,
         lstm_head_dropouts=args.lstm_head_dropouts,
+        transformer_embed_dims=args.transformer_embed_dims,
+        transformer_heads=args.transformer_heads,
+        transformer_layers=args.transformer_layers,
+        transformer_ff_dims=args.transformer_ff_dims,
+        transformer_dropouts=args.transformer_dropouts,
+        transformer_head_dropouts=args.transformer_head_dropouts,
     )
     if args.max_candidates > 0:
         candidates = candidates[: args.max_candidates]

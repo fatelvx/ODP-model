@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader
 from mania_difficulty.data.dataset import ManiaDifficultyDataset, collate_batch
 from mania_difficulty.models.factory import create_model
 from mania_difficulty.models.tabular import summarize_sequence
+from mania_difficulty.visualize import write_run_report
 
 
 def scaled_embeddings(embeddings: np.ndarray) -> np.ndarray:
@@ -118,7 +119,9 @@ def collect_neural_embeddings(
                     row[f"pred_{target}"] = float(pred[row_index, target_index])
                 rows.append(row)
 
-    return pd.DataFrame(rows), np.vstack(embeddings).astype("float32")
+    frame = pd.DataFrame(rows)
+    frame.attrs["target_columns"] = target_columns
+    return frame, np.vstack(embeddings).astype("float32")
 
 
 def collect_tabular_embeddings(
@@ -154,7 +157,9 @@ def collect_tabular_embeddings(
     for row_index, row in enumerate(rows):
         for target_index, target in enumerate(target_columns):
             row[f"pred_{target}"] = float(pred[row_index, target_index])
-    return pd.DataFrame(rows), embedding_array
+    frame = pd.DataFrame(rows)
+    frame.attrs["target_columns"] = target_columns
+    return frame, embedding_array
 
 
 def write_projection_plot(frame: pd.DataFrame, out_png: Path, *, color_target: str) -> None:
@@ -295,6 +300,13 @@ def write_embedding_projection(
         method=method,
         color_target=color_target,
     )
+    if out_html.parent.resolve() == checkpoint_path.parent.resolve():
+        target_columns = list(frame.attrs.get("target_columns", []))
+        write_run_report(
+            checkpoint_path.parent,
+            target_columns=target_columns,
+            metrics_path=checkpoint_path.parent / "metrics.json",
+        )
     return frame
 
 

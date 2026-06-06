@@ -173,6 +173,16 @@ def model_config_from_args(args: argparse.Namespace) -> dict[str, object]:
             "hidden_dim": args.summary_hidden_dim,
             "dropout": args.summary_dropout,
         }
+    if args.model == "transformer":
+        return {
+            "embed_dim": args.transformer_embed_dim,
+            "num_heads": args.transformer_heads,
+            "num_layers": args.transformer_layers,
+            "ff_dim": args.transformer_ff_dim,
+            "dropout": args.transformer_dropout,
+            "head_dropout": args.transformer_head_dropout,
+            "max_positions": args.max_notes,
+        }
     return {}
 
 
@@ -901,9 +911,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="")
     parser.add_argument(
         "--model",
-        choices=["summary", "lstm", "tabular_forest"],
+        choices=["summary", "lstm", "transformer", "tabular_forest"],
         default="lstm",
-        help="Use tabular_forest for small-data baseline, summary for fast neural CPU pilots, lstm for sequence GPU runs.",
+        help="Use tabular_forest for small-data baseline, summary for fast neural CPU pilots, lstm/transformer for GPU sequence runs.",
     )
     parser.add_argument(
         "--loss-weights",
@@ -953,6 +963,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lstm-head-dropout", type=float, default=0.3)
     parser.add_argument("--summary-hidden-dim", type=int, default=128)
     parser.add_argument("--summary-dropout", type=float, default=0.2)
+    parser.add_argument("--transformer-embed-dim", type=int, default=64)
+    parser.add_argument("--transformer-heads", type=int, default=4)
+    parser.add_argument("--transformer-layers", type=int, default=3)
+    parser.add_argument("--transformer-ff-dim", type=int, default=256)
+    parser.add_argument("--transformer-dropout", type=float, default=0.1)
+    parser.add_argument("--transformer-head-dropout", type=float, default=0.2)
     return parser.parse_args()
 
 

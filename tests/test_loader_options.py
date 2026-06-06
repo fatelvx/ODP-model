@@ -10,6 +10,7 @@ from mania_difficulty.train import (
     latest_checkpoint_path,
     mixed_precision_enabled,
     positive_int,
+    runtime_environment_metadata,
 )
 
 
@@ -75,6 +76,17 @@ class LoaderOptionTests(unittest.TestCase):
             str(latest_checkpoint_path("outputs/runs/demo")).replace("\\", "/"),
             "outputs/runs/demo/last_checkpoint.pt",
         )
+
+    def test_runtime_environment_metadata_records_device_and_torch(self):
+        args = SimpleNamespace(device="")
+
+        metadata = runtime_environment_metadata(args, torch.device("cpu"))
+
+        self.assertEqual(metadata["device"], "cpu")
+        self.assertEqual(metadata["requested_device"], "auto")
+        self.assertEqual(metadata["torch_version"], torch.__version__)
+        self.assertEqual(metadata["cuda_available"], torch.cuda.is_available())
+        self.assertIn("cuda_device_count", metadata)
 
 
 if __name__ == "__main__":

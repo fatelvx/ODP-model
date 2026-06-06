@@ -104,7 +104,7 @@ Each run saves:
 
 - `history.csv`: train/val loss, validation MAE, validation pairwise order, epoch seconds, LR, and CUDA peak memory per epoch
 - `learning_curve.png`: loss curve plus validation MAE / pairwise-order curve when available
-- `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, baseline wins, and fragile metadata-bin checks
+- `run_report.html`: includes Model Verdict, Training Health, Training Performance, and Worst Error Slices tables for quick quality, validation metrics, loss, speed, LR, memory, runtime device, baseline wins, and fragile metadata-bin checks
 - `predictions.csv`: actual model outputs on the test split
 - `prediction_rankings.csv`: predicted hardest, predicted easiest, and largest-error maps
 - `human_review.csv`: maps worth checking by hand
@@ -385,8 +385,9 @@ python -m mania_difficulty.tools.build_dashboard `
 
 Start with the dashboard's `Run Decision Summary` table when comparing runs.
 It condenses each run into baseline wins, ranking quality, weakest target, and
-the generated `Next Action`; then use the run cards below it for plots and
-human-review files. The dashboard command also writes
+the generated `Next Action`; it also keeps device, AMP, and effective batch
+size visible so Colab GPU runs are easier to compare. Then use the run cards
+below it for plots and human-review files. The dashboard command also writes
 `run_decision_summary.csv` beside the HTML so the same summary can be sorted,
 saved, or included in Colab output downloads.
 

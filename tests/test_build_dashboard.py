@@ -94,6 +94,9 @@ class BuildDashboardTests(unittest.TestCase):
                             "model_name": "summary",
                             "evaluation": "holdout",
                             "seed": 42,
+                            "device": "cuda",
+                            "amp_enabled": True,
+                            "effective_batch_size": 64,
                             "checkpoint_metric": "val_mean_pairwise_order_accuracy",
                             "best_checkpoint_score": 0.72,
                         },
@@ -163,6 +166,10 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("run_decision_summary.csv", html)
         self.assertIn("Fix acc_std before longer training", html)
         self.assertIn("next_action", decision_summary)
+        self.assertIn("device", decision_summary)
+        self.assertIn("cuda", decision_summary)
+        self.assertIn("amp_enabled", decision_summary)
+        self.assertIn("effective_batch_size", decision_summary)
         self.assertIn("Fix acc_std before longer training", decision_summary)
         self.assertIn("Human Judgment Scores", html)
         self.assertIn("model_agreement_rate", html)

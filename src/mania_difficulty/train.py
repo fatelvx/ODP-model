@@ -309,6 +309,29 @@ def mixed_precision_enabled(args: argparse.Namespace, device: torch.device) -> b
     raise ValueError(f"Unknown amp mode: {amp_mode}")
 
 
+def runtime_environment_metadata(
+    args: argparse.Namespace,
+    device: torch.device,
+) -> dict[str, object]:
+    cuda_available = torch.cuda.is_available()
+    metadata: dict[str, object] = {
+        "device": str(device),
+        "requested_device": getattr(args, "device", "") or "auto",
+        "torch_version": torch.__version__,
+        "cuda_available": cuda_available,
+        "cuda_device_count": torch.cuda.device_count() if cuda_available else 0,
+    }
+    if device.type == "cuda" and cuda_available:
+        device_index = device.index if device.index is not None else torch.cuda.current_device()
+        metadata["cuda_device_index"] = device_index
+        metadata["cuda_device_name"] = torch.cuda.get_device_name(device_index)
+        capability = torch.cuda.get_device_capability(device_index)
+        metadata["cuda_device_capability"] = f"{capability[0]}.{capability[1]}"
+    cudnn_version = torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None
+    metadata["cudnn_version"] = "" if cudnn_version is None else cudnn_version
+    return metadata
+
+
 def autocast_context(device: torch.device, enabled: bool):
     if not enabled:
         return nullcontext()
@@ -900,6 +923,7 @@ def write_tabular_cross_validation(
         "seed": args.seed,
         "evaluation": "cv_oof",
         "feature_set": args.feature_set,
+        **runtime_environment_metadata(args, torch.device("cpu")),
         "cv_folds": args.cv_folds,
         "split_strategy": split_strategy,
         "group_column": args.group_column if split_strategy.startswith("group:") else "",
@@ -1017,6 +1041,7 @@ def train_tabular_forest(
         "seed": args.seed,
         "evaluation": "holdout",
         "feature_set": args.feature_set,
+        **runtime_environment_metadata(args, torch.device("cpu")),
         **split_metadata,
         "best_epoch": 1,
         "best_val_loss": val_loss,
@@ -1371,6 +1396,7 @@ def train(args: argparse.Namespace) -> Path:
         "seed": args.seed,
         "evaluation": "holdout",
         "model_config": model.config,
+        **runtime_environment_metadata(args, device),
         **split_metadata,
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,

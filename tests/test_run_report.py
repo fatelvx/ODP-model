@@ -123,6 +123,12 @@ class RunReportTests(unittest.TestCase):
                         },
                         "_run": {
                             "model_name": "summary",
+                            "device": "cuda",
+                            "requested_device": "auto",
+                            "torch_version": "2.8.0+cu128",
+                            "cuda_available": True,
+                            "cuda_device_name": "NVIDIA T4",
+                            "cuda_device_count": 1,
                             "amp": "auto",
                             "amp_enabled": False,
                             "batch_size": 8,
@@ -156,6 +162,15 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Worst Error Slices", report)
         self.assertIn("score_count: high", report)
         self.assertIn("0.250000", report)
+        self.assertIn("Device", report)
+        self.assertIn("cuda", report)
+        self.assertIn("Requested Device", report)
+        self.assertIn("Torch Version", report)
+        self.assertIn("2.8.0+cu128", report)
+        self.assertIn("CUDA Available", report)
+        self.assertIn("CUDA Device", report)
+        self.assertIn("NVIDIA T4", report)
+        self.assertIn("CUDA Device Count", report)
         self.assertIn("AMP Enabled", report)
         self.assertIn("False", report)
         self.assertIn("Grad Accum Steps", report)

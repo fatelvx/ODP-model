@@ -45,10 +45,10 @@ class BuildDashboardTests(unittest.TestCase):
             (run_dir / "history.csv").write_text(
                 "\n".join(
                     [
-                        "epoch,train_loss,val_loss",
-                        "1,0.5,0.4",
-                        "2,0.3,0.35",
-                        "3,0.2,0.5",
+                        "epoch,train_loss,val_loss,epoch_seconds,lr,cuda_max_memory_mb",
+                        "1,0.5,0.4,1.0,0.001,100.0",
+                        "2,0.3,0.35,2.0,0.0005,150.0",
+                        "3,0.2,0.5,3.0,0.0001,125.0",
                     ]
                 ),
                 encoding="utf-8",
@@ -100,6 +100,8 @@ class BuildDashboardTests(unittest.TestCase):
         self.assertIn("Training Health", html)
         self.assertIn("Best Epoch", html)
         self.assertIn("Overfit Signal", html)
+        self.assertIn("Training Performance", html)
+        self.assertIn("Peak CUDA Memory MB", html)
 
 
 if __name__ == "__main__":

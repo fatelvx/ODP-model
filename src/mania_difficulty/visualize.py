@@ -128,6 +128,57 @@ def training_health_html(history_csv: Path, *, heading_level: int = 2) -> str:
     return f"<{heading_tag}>Training Health</{heading_tag}><table><tbody>{row_html}</tbody></table>"
 
 
+def training_performance_summary(history_csv: Path) -> dict[str, object]:
+    if not history_csv.exists():
+        return {}
+    try:
+        history = pd.read_csv(history_csv)
+    except (pd.errors.EmptyDataError, ValueError):
+        return {}
+    if "epoch_seconds" not in history.columns:
+        return {}
+
+    epoch_seconds = pd.to_numeric(history["epoch_seconds"], errors="coerce").dropna()
+    if epoch_seconds.empty:
+        return {}
+
+    summary: dict[str, object] = {
+        "epoch_count": int(epoch_seconds.shape[0]),
+        "total_epoch_seconds": float(epoch_seconds.sum()),
+        "average_epoch_seconds": float(epoch_seconds.mean()),
+    }
+    if "lr" in history.columns:
+        lr_values = pd.to_numeric(history["lr"], errors="coerce").dropna()
+        if not lr_values.empty:
+            summary["final_lr"] = float(lr_values.iloc[-1])
+    if "cuda_max_memory_mb" in history.columns:
+        memory_values = pd.to_numeric(history["cuda_max_memory_mb"], errors="coerce").dropna()
+        if not memory_values.empty:
+            summary["peak_cuda_memory_mb"] = float(memory_values.max())
+    return summary
+
+
+def training_performance_html(history_csv: Path, *, heading_level: int = 2) -> str:
+    summary = training_performance_summary(history_csv)
+    if not summary:
+        return ""
+    heading_tag = f"h{heading_level}"
+    rows = [
+        ("Epoch Count", summary["epoch_count"]),
+        ("Total Epoch Seconds", f"{summary['total_epoch_seconds']:.2f}"),
+        ("Average Epoch Seconds", f"{summary['average_epoch_seconds']:.2f}"),
+    ]
+    if "final_lr" in summary:
+        rows.append(("Final LR", f"{summary['final_lr']:.6g}"))
+    if "peak_cuda_memory_mb" in summary:
+        rows.append(("Peak CUDA Memory MB", f"{summary['peak_cuda_memory_mb']:.1f}"))
+    row_html = "".join(
+        f"<tr><th>{html.escape(str(label))}</th><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return f"<{heading_tag}>Training Performance</{heading_tag}><table><tbody>{row_html}</tbody></table>"
+
+
 def metrics_table_html(metrics: dict, target_columns: list[str]) -> str:
     rows = []
     for target in target_columns:
@@ -305,6 +356,7 @@ def write_run_report(
         else ""
     )
     health_html = training_health_html(run_dir / "history.csv")
+    performance_html = training_performance_html(run_dir / "history.csv")
     embedding_html = ""
     embedding_png = run_dir / "embedding_projection.png"
     embedding_report = run_dir / "embedding_report.html"
@@ -361,6 +413,7 @@ def write_run_report(
   {metrics_html}
   {cv_html}
   {health_html}
+  {performance_html}
   <h2>Learning Curve</h2>
   {learning_curve_html}
   <h2>Predicted vs Observed Proxy</h2>

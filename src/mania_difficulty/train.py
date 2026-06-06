@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import random
+import time
 from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
@@ -34,6 +35,16 @@ from mania_difficulty.visualize import (
     plot_prediction_scatter,
     write_run_report,
 )
+
+
+HISTORY_COLUMNS = [
+    "epoch",
+    "train_loss",
+    "val_loss",
+    "epoch_seconds",
+    "lr",
+    "cuda_max_memory_mb",
+]
 
 
 def seed_everything(seed: int) -> None:
@@ -300,14 +311,52 @@ def evaluate_loader(
 
 def write_history_header(path: Path) -> None:
     with path.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=["epoch", "train_loss", "val_loss"])
+        writer = csv.DictWriter(file, fieldnames=HISTORY_COLUMNS)
         writer.writeheader()
 
 
-def append_history(path: Path, epoch: int, train_loss: float, val_loss: float) -> None:
+def ensure_history_columns(path: Path) -> None:
+    if not path.exists():
+        write_history_header(path)
+        return
+
+    with path.open("r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        fieldnames = reader.fieldnames or []
+        if fieldnames == HISTORY_COLUMNS:
+            return
+        rows = list(reader)
+
+    with path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=HISTORY_COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: row.get(column, "") for column in HISTORY_COLUMNS})
+
+
+def append_history(
+    path: Path,
+    epoch: int,
+    train_loss: float,
+    val_loss: float,
+    *,
+    epoch_seconds: float | None = None,
+    lr: float | None = None,
+    cuda_max_memory_mb: float | None = None,
+) -> None:
+    ensure_history_columns(path)
     with path.open("a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=["epoch", "train_loss", "val_loss"])
-        writer.writerow({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
+        writer = csv.DictWriter(file, fieldnames=HISTORY_COLUMNS)
+        writer.writerow(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "epoch_seconds": "" if epoch_seconds is None else epoch_seconds,
+                "lr": "" if lr is None else lr,
+                "cuda_max_memory_mb": "" if cuda_max_memory_mb is None else cuda_max_memory_mb,
+            }
+        )
 
 
 def write_predictions(
@@ -865,6 +914,10 @@ def train(args: argparse.Namespace) -> Path:
             print(f"--resume was set but {last_checkpoint_path} was not found; starting fresh.")
 
     for epoch in range(start_epoch, args.epochs + 1):
+        epoch_start_time = time.perf_counter()
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+        epoch_lr = float(optimizer.param_groups[0]["lr"])
         model.train()
         train_losses = []
         optimizer.zero_grad(set_to_none=True)
@@ -902,8 +955,30 @@ def train(args: argparse.Namespace) -> Path:
             target_std_np,
             amp_active,
         )
-        append_history(history_csv, epoch, train_loss, val_loss)
-        print(f"epoch={epoch:03d} train_loss={train_loss:.5f} val_loss={val_loss:.5f}")
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+            cuda_max_memory_mb = torch.cuda.max_memory_allocated(device) / (1024 * 1024)
+        else:
+            cuda_max_memory_mb = None
+        epoch_seconds = time.perf_counter() - epoch_start_time
+        append_history(
+            history_csv,
+            epoch,
+            train_loss,
+            val_loss,
+            epoch_seconds=epoch_seconds,
+            lr=epoch_lr,
+            cuda_max_memory_mb=cuda_max_memory_mb,
+        )
+        memory_text = (
+            f" cuda_peak_mb={cuda_max_memory_mb:.1f}"
+            if cuda_max_memory_mb is not None
+            else ""
+        )
+        print(
+            f"epoch={epoch:03d} train_loss={train_loss:.5f} val_loss={val_loss:.5f} "
+            f"epoch_seconds={epoch_seconds:.2f} lr={epoch_lr:.6g}{memory_text}"
+        )
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss

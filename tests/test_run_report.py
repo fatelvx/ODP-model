@@ -28,9 +28,30 @@ class RunReportTests(unittest.TestCase):
             (run_dir / "attention_report.html").write_text("<html>attention</html>", encoding="utf-8")
             pd.DataFrame(
                 [
-                    {"epoch": 1, "train_loss": 0.5, "val_loss": 0.4},
-                    {"epoch": 2, "train_loss": 0.3, "val_loss": 0.35},
-                    {"epoch": 3, "train_loss": 0.2, "val_loss": 0.5},
+                    {
+                        "epoch": 1,
+                        "train_loss": 0.5,
+                        "val_loss": 0.4,
+                        "epoch_seconds": 1.0,
+                        "lr": 0.001,
+                        "cuda_max_memory_mb": 100.0,
+                    },
+                    {
+                        "epoch": 2,
+                        "train_loss": 0.3,
+                        "val_loss": 0.35,
+                        "epoch_seconds": 2.0,
+                        "lr": 0.0005,
+                        "cuda_max_memory_mb": 150.0,
+                    },
+                    {
+                        "epoch": 3,
+                        "train_loss": 0.2,
+                        "val_loss": 0.5,
+                        "epoch_seconds": 3.0,
+                        "lr": 0.0001,
+                        "cuda_max_memory_mb": 125.0,
+                    },
                 ]
             ).to_csv(run_dir / "history.csv", index=False)
             metrics_path = run_dir / "metrics.json"
@@ -75,6 +96,9 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Possible", report)
         self.assertIn("Resume", report)
         self.assertIn("Resumed From Epoch", report)
+        self.assertIn("Training Performance", report)
+        self.assertIn("Average Epoch Seconds", report)
+        self.assertIn("Peak CUDA Memory MB", report)
 
 
 if __name__ == "__main__":
